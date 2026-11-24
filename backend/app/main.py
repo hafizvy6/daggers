@@ -11,6 +11,7 @@ from typing import Callable
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .api import findings, health, scan, stream
@@ -246,6 +247,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     if active_settings.web_dir.exists():
+        @app.get("/share", include_in_schema=False)
+        async def share_target() -> FileResponse:
+            """PWA share_target landing; web/js/app.js routes this to #/check."""
+            return FileResponse(active_settings.web_dir / "index.html")
+
+        @app.get("/api/examples", include_in_schema=False)
+        async def web_examples() -> dict:
+            path = active_settings.web_dir / "fixtures" / "examples.json"
+            if not path.exists():
+                return {}
+            return json.loads(path.read_text(encoding="utf-8"))
+
         app.mount(
             "/",
             StaticFiles(directory=str(active_settings.web_dir), html=True),

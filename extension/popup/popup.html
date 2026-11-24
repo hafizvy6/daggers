@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Daggers Shield</title><link rel="stylesheet" href="popup.css"></head>
+<body>
+  <h1>Daggers Shield</h1>
+  <p class="disclaimer">Unofficial hackathon prototype. Not an official UAE Police or government product.</p>
+  <label class="row"><input type="checkbox" id="enabled"> Label Google results</label>
+  <label for="apiBase">Backend URL</label>
+  <input id="apiBase" type="url" spellcheck="false" placeholder="http://localhost:8000">
+  <div class="row"><button id="save">Save</button><button id="clear" class="secondary">Clear cache</button></div>
+  <p id="status" class="status" aria-live="polite">Checking backend…</p>
+  <dl class="legend">
+    <dt><span class="daggers-tag daggers-tag--safe">SAFE</span></dt><dd>Authenticated official source, nothing suspicious</dd>
+    <dt><span class="daggers-tag daggers-tag--warning">WARNING</span></dt><dd>Not authenticated, or needs review</dd>
+    <dt><span class="daggers-tag daggers-tag--misleading">MISLEADING</span></dt><dd>Claim contradicted or unverifiable</dd>
+    <dt><span class="daggers-tag daggers-tag--fake">FAKE</span></dt><dd>Confirmed malicious / impersonation</dd>
+    <dt><span class="daggers-tag daggers-tag--unchecked">NOT CHECKED</span></dt><dd>Backend unavailable — not a verdict</dd>
+  </dl>
+  <p class="privacy">Only the result link (without its query string) is sent to your configured backend. No search terms or browsing history are collected.</p>
+  <script src="../lib/core.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

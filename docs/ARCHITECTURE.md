@@ -1,8 +1,8 @@
-# Daggers — WS1 Architecture
+# Daggers — Integrated Architecture
 
 ## Runtime shape
 
-One Python 3.11 FastAPI process serves REST, SSE, static evidence, and runs four asyncio loops. SQLite WAL is the sole durable store. Heavy browser/vision work is optional and disabled in the default deployment.
+One Python 3.11 FastAPI process serves REST, SSE, the static `web/` PWA, static evidence, and runs four asyncio loops. SQLite WAL is the sole durable store; WS2 sweep runs persist through `db/repo.py`. Heavy browser/vision work is optional and disabled in the default deployment.
 
 ```text
                          ┌──────────────────────────────────────────────┐
@@ -62,3 +62,18 @@ One Python 3.11 FastAPI process serves REST, SSE, static evidence, and runs four
 - `/api/scan` echoes input to the caller but never stores it.
 - CORS is an explicit origin allowlist from `CORS_ORIGINS`; the optional regex is for controlled Pages deployments.
 - The renderer aborts non-read requests, disables downloads, and never fills or submits forms.
+
+
+## Integrated lane boundaries
+
+| Lane | Owned paths | Joins to the brain by |
+|---|---|---|
+| WS1 | `core/**`, `radar/**`, `vision/**`, `db/**`, `reports/**`, core `api/**`, `seed/**` | owns the deterministic scorer, C1/C2/C4/C6 shapes, SQLite, SSE, and evidence |
+| WS2 | `backend/app/channels/**`, `api/sweep.py`, `api/guard.py`, `guard/**`, `extension/**` | imports `core.scorer`/`core.numbers` in-process; consumes `/api/guard/feed`; persists sweeps through `repo.py` |
+| WS3 | `web/**`, `backend/app/ai/**`, `api/ai.py`, `api/reports.py`, `ops/**` | renders C1–C5; report/AI routers read canonical evidence from `runtime.repo`; AI is explanation-only |
+
+All three lanes are flattened into one repository root. The WS3 standalone demo
+server/store and wrapper-shaped seed fixtures are excluded so there is no second
+app, second store, or second verdict implementation. Shared files
+(`main.py`, `config.py`, `db/repo.py`, root build files, and docs) are the only
+integration seam.

@@ -1,0 +1,124 @@
+{
+  "beat_delay_ms": 14000,
+  "finding": {
+    "id": 43,
+    "domain": "adcb-login-verify.top",
+    "verdict": "MALICIOUS",
+    "score": 0.91,
+    "brand": "ADCB",
+    "reasons": [
+      "brand typo 'adcb' (distance 1) on a non-official domain",
+      "certificate issued 2 minutes ago",
+      "94% visual match with adcb.ae/login",
+      "login form posts to a foreign host"
+    ],
+    "cert_issued": "2026-11-24T07:58:00Z",
+    "first_seen": "2026-11-24T07:58:00Z",
+    "clone": 94,
+    "evidence_url": null,
+    "gallery_match": "adcb.ae/login",
+    "source": "crt.sh",
+    "is_case_file": false,
+    "age_min": 2,
+    "cert_age_min": 2,
+    "registrar": "NameSilo, LLC",
+    "path": "/login",
+    "verdict_note": "Another ADCB login clone, born minutes ago.",
+    "scam_type": "fake-banking-login",
+    "signals": [
+      {
+        "label": "Brand typo on a non-official domain",
+        "weight": 0.55,
+        "note": ""
+      },
+      {
+        "label": "Certificate younger than 24 hours",
+        "weight": 0.25,
+        "note": ""
+      },
+      {
+        "label": "Visual clone of the real login page",
+        "weight": 0.6,
+        "note": ""
+      },
+      {
+        "label": "Login form posts to a foreign host",
+        "weight": 0.3,
+        "note": ""
+      }
+    ],
+    "verdict_note_ar": "نسخة أخرى من صفحة دخول بنك أبوظبي التجاري، وُلدت قبل دقائق.",
+    "reasons_ar": [
+      "خطأ في اسم العلامة «adcb» (مسافة حرف واحد) على نطاق غير رسمي",
+      "صدرت الشهادة قبل دقيقتين",
+      "تطابق بصري 94% مع صفحة adcb.ae/login",
+      "نموذج الدخول يُرسل البيانات إلى خادم خارجي"
+    ]
+  },
+  "report": {
+    "id": 8,
+    "finding_id": 43,
+    "domain": "adcb-login-verify.top",
+    "status": "QUEUED",
+    "auto": true,
+    "filed_at": "2026-11-24T07:58:00Z",
+    "filed_age_min": 0,
+    "blocked_hits": 0,
+    "channel": "web",
+    "evidence": {
+      "id": 43,
+      "domain": "adcb-login-verify.top",
+      "verdict": "MALICIOUS",
+      "score": 0.91,
+      "brand": "ADCB",
+      "reasons": [
+        "brand typo 'adcb' (distance 1) on a non-official domain",
+        "certificate issued 2 minutes ago",
+        "94% visual match with adcb.ae/login",
+        "login form posts to a foreign host"
+      ],
+      "cert_issued": "2026-11-24T07:58:00Z",
+      "first_seen": "2026-11-24T07:58:00Z",
+      "clone": 94,
+      "evidence_url": null,
+      "gallery_match": "adcb.ae/login",
+      "source": "crt.sh",
+      "is_case_file": false,
+      "age_min": 2,
+      "cert_age_min": 2,
+      "registrar": "NameSilo, LLC",
+      "path": "/login",
+      "verdict_note": "Another ADCB login clone, born minutes ago.",
+      "scam_type": "fake-banking-login",
+      "signals": [
+        {
+          "label": "Brand typo on a non-official domain",
+          "weight": 0.55,
+          "note": ""
+        },
+        {
+          "label": "Certificate younger than 24 hours",
+          "weight": 0.25,
+          "note": ""
+        },
+        {
+          "label": "Visual clone of the real login page",
+          "weight": 0.6,
+          "note": ""
+        },
+        {
+          "label": "Login form posts to a foreign host",
+          "weight": 0.3,
+          "note": ""
+        }
+      ],
+      "verdict_note_ar": "نسخة أخرى من صفحة دخول بنك أبوظبي التجاري، وُلدت قبل دقائق.",
+      "reasons_ar": [
+        "خطأ في اسم العلامة «adcb» (مسافة حرف واحد) على نطاق غير رسمي",
+        "صدرت الشهادة قبل دقيقتين",
+        "تطابق بصري 94% مع صفحة adcb.ae/login",
+        "نموذج الدخول يُرسل البيانات إلى خادم خارجي"
+      ]
+    }
+  }
+}

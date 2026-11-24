@@ -1,0 +1,20 @@
+{
+  "7": {
+    "summary_en": "This is a credential-harvesting clone of the ADCB online banking login page, hosted on adcb-secure-login.xyz. The site impersonates Abu Dhabi Commercial Bank (ADCB) and reproduces the bank's login page at a 97% visual match, including the logo, layout, and the Arabic/English language switch. It works by asking for the card number, PIN, and a one-time code on a single page, then posting everything to a foreign host (collect.adcb-verify.top) controlled by the operator. The certificate was issued 42 minutes before detection and the domain has no legitimate history. Recommended action: keep the domain blocked at the Guard, initiate registrar takedown, and prioritise outreach to ADCB fraud operations. Priority: P1 — active banking credential theft.",
+    "summary_ar": "هذا موقع منسوخ يستهدف سرقة بيانات الدخول إلى الخدمات المصرفية عبر الإنترنت لبنك أبوظبي التجاري، ويُستضاف على النطاق adcb-secure-login.xyz. ينتحل الموقع شخصية بنك أبوظبي التجاري (ADCB) ويطابق صفحة تسجيل الدخول الأصلية بنسبة 97٪، بما في ذلك الشعار والتخطيط ومفتاح التبديل بين العربية والإنجليزية. ويعمل الموقع عبر طلب رقم البطاقة والرقم السري ورمز التحقق لمرة واحدة في صفحة واحدة، ثم إرسالها جميعًا إلى خادم خارجي يتحكم فيه المشغّل (collect.adcb-verify.top). صدرت شهادة الموقع قبل 42 دقيقة فقط من اكتشافه، ولا يوجد للنطاق سجل استخدام مشروع. الإجراء الموصى به: إبقاء النطاق محجوبًا في الحارس، وبدء إجراء الإزالة لدى مسجّل النطاق، والتواصل مع إدارة مكافحة الاحتيال في البنك بأولوية. الأولوية: قصوى (P1) — سرقة بيانات مصرفية نشطة.",
+    "provider": "gemini",
+    "fallback": false
+  },
+  "6": {
+    "summary_en": "This is a payment-harvesting look-alike of the Aramex shipment tracking page at aramex-delivery-fee.click, matching the real page at 89%. It impersonates Aramex and works through the familiar 'parcel on hold, pay a small clearance fee' message: the victim enters card details on a page that posts them to a foreign host. The certificate is three hours old and the domain carries two lure keywords ('delivery' and 'fee'). Recommended action: keep it blocked, notify Aramex brand protection, and file the registrar abuse report. Priority: P2.",
+    "summary_ar": "هذا موقع منسوخ يستهدف سرقة بيانات الدفع، ويقلّد صفحة تتبّع الشحنات الخاصة بأرامكس على النطاق aramex-delivery-fee.click بنسبة تطابق 89٪. ينتحل الموقع شخصية أرامكس ويعمل عبر الرسالة المألوفة: «شحنتك محتجزة، ادفع رسمًا جمركيًا بسيطًا»، إذ يُدخل الضحية بيانات بطاقته في صفحة تُرسلها إلى خادم خارجي. عمر الشهادة ثلاث ساعات فقط، ويحتوي النطاق على كلمتين مُغريتين هما «delivery» و«fee». الإجراء الموصى به: إبقاء الحجب، وإبلاغ فريق حماية العلامة في أرامكس، وتقديم بلاغ الإساءة إلى المسجّل. الأولوية: عالية (P2).",
+    "provider": "gemini",
+    "fallback": false
+  },
+  "5": {
+    "summary_en": "This site impersonates Abu Dhabi Police's fines payment service on dubaipolice-fine-pay.info and reproduces the official payment page at 96%. It works by presenting a fake traffic fine and requesting full card details plus the one-time code on one screen, then forwarding them to an external collector. The certificate is 90 minutes old. Recommended action: keep the block in place, notify the Police cybercrime unit through this portal, and request registrar takedown. Priority: P1 — government impersonation.",
+    "summary_ar": "ينتحل هذا الموقع خدمة سداد المخالفات المرورية الخاصة بشرطة أبوظبي على النطاق dubaipolice-fine-pay.info، ويطابق صفحة الدفع الرسمية بنسبة 96٪. ويعمل بعرض مخالفة مرورية وهمية وطلب بيانات البطاقة كاملة ورمز التحقق لمرة واحدة في شاشة واحدة، ثم تحويلها إلى جهة خارجية. عمر الشهادة 90 دقيقة. الإجراء الموصى به: استمرار الحجب، وإبلاغ وحدة الجرائم الإلكترونية عبر هذه البوابة، وطلب الإزالة من مسجّل النطاق. الأولوية: قصوى (P1) — انتحال جهة حكومية.",
+    "provider": "gemini",
+    "fallback": false
+  }
+}

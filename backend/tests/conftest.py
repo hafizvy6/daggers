@@ -34,7 +34,7 @@ def api_env(tmp_path):
         evidence_dir=tmp_path / "evidence",
         gallery_dir=tmp_path / "gallery",
         seed_dir=SEED_DIR,
-        web_dir=tmp_path / "web",
+        web_dir=ROOT / "web",
         mode="demo",
         demo_mode=True,
         environment="demo",

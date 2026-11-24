@@ -1,0 +1,6 @@
+In at most 2 sentences, explain to a non-technical person why this result looks the way
+it does, using only the `reasons` in the evidence. Warm, plain, no jargon, no verdict
+changes, English. This is shown under a checker result.
+
+Evidence:
+{EVIDENCE_JSON}
