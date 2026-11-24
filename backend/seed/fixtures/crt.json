@@ -1,0 +1,50 @@
+[
+  {
+    "domain": "adcb-secure-login.xyz",
+    "source": "crt.sh",
+    "cert_names": [
+      "adcb-secure-login.xyz"
+    ],
+    "cert_issued": "2026-11-24T07:58:00Z",
+    "first_seen": "2026-11-24T08:01:00Z",
+    "clone_score": 97,
+    "gallery_match": "adcb.ae/login",
+    "form_action_mismatch": true,
+    "payment_harvest_fields": false,
+    "phishtank_confirmed": false,
+    "text": "secure login verification",
+    "is_case_file": false
+  },
+  {
+    "domain": "xn--mazon-3ve.ae",
+    "source": "crt.sh",
+    "cert_names": [
+      "xn--mazon-3ve.ae"
+    ],
+    "cert_issued": "2026-11-24T07:41:00Z",
+    "first_seen": "2026-11-24T07:43:00Z",
+    "clone_score": 0,
+    "gallery_match": "amazon.ae/home",
+    "form_action_mismatch": false,
+    "payment_harvest_fields": false,
+    "phishtank_confirmed": false,
+    "text": "online shopping",
+    "is_case_file": true
+  },
+  {
+    "domain": "emiratesnbd-refund.click",
+    "source": "crt.sh",
+    "cert_names": [
+      "emiratesnbd-refund.click"
+    ],
+    "cert_issued": "2026-11-24T07:22:00Z",
+    "first_seen": "2026-11-24T07:25:00Z",
+    "clone_score": 93,
+    "gallery_match": "emiratesnbd.com/login",
+    "form_action_mismatch": true,
+    "payment_harvest_fields": true,
+    "phishtank_confirmed": true,
+    "text": "refund card verification",
+    "is_case_file": false
+  }
+]
