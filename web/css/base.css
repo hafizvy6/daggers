@@ -20,7 +20,7 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* ---------- AR typography contract (WS3 §6) ---------------- */
+/* ---------- AR typography contract ------------------------ */
 html[lang="ar"] body {
   font-family: var(--font-ar);
   line-height: var(--lh-ar-body);

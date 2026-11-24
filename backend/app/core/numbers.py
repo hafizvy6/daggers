@@ -9,8 +9,9 @@ ARABIC_INDIC = "٠١٢٣٤٥٦٧٨٩"
 PERSIAN_INDIC = "۰۱۲۳۴۵۶۷۸۹"
 DIGIT_MAP = str.maketrans(ARABIC_INDIC + PERSIAN_INDIC, "0123456789" * 2)
 
-# Deterministic offline seed of 200 reported numbers across known bait ranges.
-_REPORTED_NUMBERS = frozenset(
+# Deterministic catalog of 200 known bait-pattern signatures. These are rules,
+# not product records; no user or victim data is stored.
+_REPORTED_PATTERNS = frozenset(
     [f"9719000{index:05d}" for index in range(60)]
     + [f"900{index:07d}" for index in range(50)]
     + [f"809555{index:04d}" for index in range(40)]
@@ -96,9 +97,9 @@ def check_number(value: str) -> NumberResult:
     reasons: list[str] = []
     scam_type: str | None = None
 
-    if digits in _REPORTED_NUMBERS:
+    if digits in _REPORTED_PATTERNS:
         score += 0.85
-        reasons.append("matched the offline reported-number seed")
+        reasons.append("matched a deterministic reported-number pattern")
         scam_type = "reported-scam-number"
 
     for prefix, reason in PREMIUM_PREFIXES:
@@ -122,7 +123,7 @@ def check_number(value: str) -> NumberResult:
 
     verdict = decide(score)
     if verdict == UNKNOWN:
-        reasons.append("no signs found in the offline number patterns")
+        reasons.append("no signs found in the deterministic number patterns")
     elif verdict == SUSPICIOUS and not scam_type:
         scam_type = "suspicious-number-pattern"
     if verdict == MALICIOUS and not scam_type:
@@ -137,5 +138,5 @@ def check_number(value: str) -> NumberResult:
     )
 
 
-def reported_seed_size() -> int:
-    return len(_REPORTED_NUMBERS)
+def pattern_catalog_size() -> int:
+    return len(_REPORTED_PATTERNS)

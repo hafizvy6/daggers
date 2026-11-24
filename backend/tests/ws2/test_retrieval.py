@@ -239,8 +239,8 @@ class TestSnapshots(unittest.TestCase):
 
 
 class TestDiscovery(unittest.TestCase):
-    def test_directory_fixture_creates_pending_candidates_only(self):
-        html = (helpers.OFFICIAL_FIXTURES / "uae_directory_sample.html").read_text(encoding="utf-8")
+    def test_directory_double_creates_pending_candidates_only(self):
+        html = (helpers.DATA_DIR / "uae_directory_sample.html").read_text(encoding="utf-8")
         candidates = parse_directory(html)
         hosts = [c.host for c in candidates]
         self.assertIn("www.harbour-authority.example", hosts)

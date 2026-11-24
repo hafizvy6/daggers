@@ -1,6 +1,6 @@
 /* ============================================================
    Daggers · i18n runtime — catalogs, t(), setLang(), dir/lang
-   Rules (WS3 §6): every visible string is t("ns.key"); missing key
+   Rules: every visible string is t("ns.key"); a missing key
    → key in dev, English in prod; Intl with the active locale;
    Western numerals site-wide.
    ============================================================ */
@@ -76,7 +76,7 @@ export function t(key, vars) {
 
 /**
  * Pick the active-language variant of data-provided text.
- * Contract: WS1 may ship `reasons_ar`, `verdict_note_ar`, `label_ar` — the
+ * Contract: the API may ship `reasons_ar`, `verdict_note_ar`, `label_ar` — the
  * backend/catalog supplies them; we never machine-translate in the UI.
  */
 export function localized(obj, field) {

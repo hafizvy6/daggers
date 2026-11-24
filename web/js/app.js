@@ -1,9 +1,9 @@
 /* ============================================================
-   Daggers · app.js — hash router + boot + chrome (lang/mode/banner)
+   Daggers · app.js — hash router + boot + live connection chrome
    Views are plain ES modules: export default async (ctx) => Node
    ============================================================ */
 import { initI18n, setLang, getLang, t, onLangChange } from "./i18n/i18n.js";
-import { initApi, watchNetwork, onState, state, setDemo, connectStream, getGuardStats, injectDemoBeat } from "./api.js";
+import { initApi, refreshApi, watchNetwork, onState, state, connectStream, getGuardStats } from "./api.js";
 import { icons, logoMark } from "./components/icons.js";
 import { el } from "./components/tag.js";
 import { toast } from "./components/toast.js";
@@ -20,7 +20,7 @@ const ROUTES = {
 };
 
 export const app = {
-  streamHooks: [],         // views can subscribe to live findings
+  streamHooks: [],         // views subscribe to real SSE findings
   lastFinding: null,
 };
 
@@ -34,108 +34,110 @@ function parseHash() {
 }
 
 function paintIcons(root = document) {
-  root.querySelectorAll("[data-icon]").forEach((n) => {
-    const key = n.getAttribute("data-icon");
-    if (icons[key] && !n.firstChild) n.innerHTML = icons[key]({ size: 18 });
+  root.querySelectorAll("[data-icon]").forEach((node) => {
+    const key = node.getAttribute("data-icon");
+    if (icons[key] && !node.firstChild) node.innerHTML = icons[key]({ size: 18 });
   });
 }
 
 function applyStaticStrings(root = document) {
-  root.querySelectorAll("[data-i18n]").forEach((n) => {
-    n.textContent = t(n.getAttribute("data-i18n"));
+  root.querySelectorAll("[data-i18n]").forEach((node) => {
+    node.textContent = t(node.getAttribute("data-i18n"));
   });
-  root.querySelectorAll("[data-i18n-aria]").forEach((n) => {
-    n.setAttribute("aria-label", t(n.getAttribute("data-i18n-aria")));
+  root.querySelectorAll("[data-i18n-aria]").forEach((node) => {
+    node.setAttribute("aria-label", t(node.getAttribute("data-i18n-aria")));
   });
 }
 
-/* ---------------- chrome: lang, mode, heartbeat, banner ----------- */
+/* ---------------- chrome: language, connection, banner ----------- */
 function wireChrome() {
   document.getElementById("brandMark").innerHTML = logoMark({ size: 26 });
 
   const langSwitch = document.getElementById("langSwitch");
-  langSwitch.addEventListener("click", (e) => {
-    const b = e.target.closest("button[data-lang]");
-    if (b) setLang(b.dataset.lang);
-  });
-
-  const modeToggle = document.getElementById("modeToggle");
-  modeToggle.addEventListener("click", (e) => {
-    const b = e.target.closest("button[data-mode]");
-    if (!b) return;
-    const demo = b.dataset.mode === "demo";
-    setDemo(demo);
-    const q = new URLSearchParams(location.search);
-    if (demo) q.set("mode", "demo"); else q.delete("mode");
-    const qs = q.toString();
-    history.replaceState(null, "", `${location.pathname}${qs ? "?" + qs : ""}${location.hash}`);
+  langSwitch.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-lang]");
+    if (button) setLang(button.dataset.lang);
   });
 
   // mobile nav drawer
   const nav = document.getElementById("nav");
   const scrim = document.getElementById("navScrim");
-  const btn = document.getElementById("menuBtn");
-  const closeNav = () => { nav.classList.remove("is-open"); scrim.classList.remove("is-open"); btn.setAttribute("aria-expanded", "false"); };
-  btn.addEventListener("click", () => {
+  const button = document.getElementById("menuBtn");
+  const closeNav = () => {
+    nav.classList.remove("is-open");
+    scrim.classList.remove("is-open");
+    button.setAttribute("aria-expanded", "false");
+  };
+  button.addEventListener("click", () => {
     const open = !nav.classList.contains("is-open");
     nav.classList.toggle("is-open", open);
     scrim.classList.toggle("is-open", open);
-    btn.setAttribute("aria-expanded", String(open));
+    button.setAttribute("aria-expanded", String(open));
   });
   scrim.addEventListener("click", closeNav);
-  nav.addEventListener("click", (e) => { if (e.target.closest("a")) closeNav(); });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeNav(); });
+  nav.addEventListener("click", (event) => { if (event.target.closest("a")) closeNav(); });
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeNav(); });
 
-  // mode + lang + network → repaint chrome
   onState(renderState);
   onLangChange(() => {
     applyStaticStrings();
     paintLangButtons();
     renderState(state);
-    navigate(true);          // every visible string is t() — re-render at the same route
+    navigate(true);
   });
 }
 
 function paintLangButtons() {
-  document.querySelectorAll("#langSwitch button").forEach((b) => {
-    b.setAttribute("aria-pressed", String(b.dataset.lang === getLang()));
+  document.querySelectorAll("#langSwitch button").forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.lang === getLang()));
   });
 }
 
-let lastMode = null;
+const RADAR_ADAPTERS = ["crt", "feeds", "enrich", "render", "search", "maps"];
+
+function liveAdapterCount(st) {
+  const adapters = st.adapters || {};
+  return RADAR_ADAPTERS.filter((name) => adapters[name] && adapters[name].enabled).length;
+}
+
+let lastSignature = null;
 function renderState(st) {
-  // lang buttons
   paintLangButtons();
-  // mode chips
-  document.querySelectorAll("#modeToggle button").forEach((b) => {
-    const demoish = st.demo || st.mode === "demo" || st.mode === "saved";
-    b.setAttribute("aria-pressed", String(
-      (b.dataset.mode === "demo" && demoish) || (b.dataset.mode === "live" && !demoish)));
-  });
-  // heartbeat
-  const hb = document.getElementById("heartbeat");
-  const hbLabel = document.getElementById("hbLabel");
   const down = st.apiDown || st.offline;
-  hb.classList.toggle("is-down", down);
-  hbLabel.textContent = down ? t("top.down") : t("top.live");
-  // banner
+  const adaptersOn = liveAdapterCount(st);
+
+  const chip = document.getElementById("connectionChip");
+  const chipLabel = document.getElementById("connectionLabel");
+  if (chip) chip.classList.toggle("is-down", down);
+  if (chipLabel) chipLabel.textContent = down ? t("top.down") : t("top.modeLive");
+
+  const heartbeat = document.getElementById("heartbeat");
+  const heartbeatLabel = document.getElementById("hbLabel");
+  heartbeat.classList.toggle("is-down", down);
+  heartbeatLabel.textContent = down ? t("top.down") : t("top.live");
+
   const banner = document.getElementById("banner");
   const tag = document.getElementById("bannerTag");
   const text = document.getElementById("bannerText");
-  banner.classList.remove("is-demo");
+  banner.classList.remove("is-on");
   if (st.offline) {
-    banner.classList.add("is-on"); tag.textContent = "OFFLINE"; text.textContent = t("top.bannerOffline");
-  } else if (st.demo || st.mode === "demo") {
-    banner.classList.add("is-on", "is-demo"); tag.textContent = "DEMO"; text.textContent = t("top.bannerDemo");
+    banner.classList.add("is-on");
+    tag.textContent = t("top.offlineTag");
+    text.textContent = t("top.bannerOffline");
   } else if (st.apiDown) {
-    banner.classList.add("is-on"); tag.textContent = "SAVED"; text.textContent = t("top.bannerApi");
-  } else {
-    banner.classList.remove("is-on");
+    banner.classList.add("is-on");
+    tag.textContent = t("top.apiUnavailableTag");
+    text.textContent = t("top.bannerApi");
+  } else if (adaptersOn === 0) {
+    banner.classList.add("is-on");
+    tag.textContent = t("top.adaptersTag");
+    text.textContent = t("top.bannerAdapters");
   }
-  // let the router re-render when the mode flips (fixtures ↔ live)
-  const sig = `${st.mode}|${st.offline}|${st.apiDown}`;
-  if (lastMode !== null && lastMode !== sig) window.dispatchEvent(new CustomEvent("daggers:modechange"));
-  lastMode = sig;
+  const signature = `${st.mode}|${st.offline}|${st.apiDown}|${adaptersOn}`;
+  if (lastSignature !== null && lastSignature !== signature) {
+    window.dispatchEvent(new CustomEvent("daggers:modechange"));
+  }
+  lastSignature = signature;
 }
 
 /* ---------------- router ---------------------------------------- */
@@ -147,62 +149,44 @@ export async function navigate(force = false) {
   currentRoute = { name, param };
   view.setAttribute("data-view", name);
 
-  // nav highlight
-  document.querySelectorAll("[data-nav]").forEach((a) => {
-    const on = a.dataset.nav === name || (name === "finding" && a.dataset.nav === "feed") || (name === "verdict" && a.dataset.nav === "check");
-    if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
+  document.querySelectorAll("[data-nav]").forEach((link) => {
+    const on = link.dataset.nav === name || (name === "finding" && link.dataset.nav === "feed") || (name === "verdict" && link.dataset.nav === "check");
+    if (on) link.setAttribute("aria-current", "page"); else link.removeAttribute("aria-current");
   });
 
   try {
-    const mod = await ROUTES[name]();
-    const ctx = { param, name, app, force };
-    const node = await mod.default(ctx);
-    // allow views to persist state (SSE hooks etc.) — never leak past route change
+    const module = await ROUTES[name]();
+    const context = { param, name, app, force };
+    const node = await module.default(context);
     if (view._cleanup) { try { view._cleanup(); } catch { /* noop */ } }
     view._cleanup = node._cleanup || null;
     view.replaceChildren(node);
-  } catch (err) {
-    console.error("[router]", err);
+  } catch (error) {
+    console.error("[router]", error);
     view.innerHTML = `<div class="card"><div class="card-title">${t("common.errorTitle")}</div><p>${t("common.errorBody")}</p></div>`;
   }
   if (!location.hash.includes("#/")) return;
-  // reset scroll on route change (not on SSE updates)
   if (!sessionStorage.getItem("daggers:keepScroll")) window.scrollTo({ top: 0 });
   sessionStorage.removeItem("daggers:keepScroll");
   paintIcons(view);
   applyStaticStrings(view);
-  if (name === "feed" && app.armDemoBeat) app.armDemoBeat();
 }
 
 /* ---------------- live stream → views ---------------------------- */
 function wireStream() {
-  const conn = connectStream({
+  const connection = connectStream({
     onFinding: (finding) => {
       app.lastFinding = finding;
-      app.streamHooks.forEach((fn) => { try { fn(finding); } catch (e) { console.error(e); } });
+      app.streamHooks.forEach((fn) => { try { fn(finding); } catch (error) { console.error(error); } });
       bumpReportBadge();
       toast(t("top.newCaught"), { kind: "good", tag: t("feed.new"), ms: 6000 });
     },
-    onHeartbeat: () => {},
+    onHeartbeat: (status) => {
+      // A real heartbeat is also a successful liveness probe.
+      if (status?.mode === "live" && state.apiDown) refreshApi();
+    },
   });
-  app.stream = conn;
-
-  // DEMO (offline) radar beat: a new fake lands once per session — beat 4 of the run-of-show.
-  // Fires on the first visit to the feed (not wherever the app happened to boot).
-  let beatTimer = null;
-  const armDemoBeat = () => {
-    if (!conn.demo || sessionStorage.getItem("daggers.demoBeat") || beatTimer) return;
-    beatTimer = setTimeout(async () => {
-      sessionStorage.setItem("daggers.demoBeat", "1");
-      try {
-        const finding = await injectDemoBeat();
-        conn.inject(finding);
-        if (location.hash.startsWith("#/feed")) { /* feed hook prepends */ }
-      } catch (e) { console.error(e); }
-    }, 14000);
-  };
-  app.armDemoBeat = armDemoBeat;
-  if (location.hash.startsWith("#/feed")) armDemoBeat(); // router may not be ready yet — re-armed below too
+  app.stream = connection;
 }
 
 async function bumpReportBadge() {
@@ -210,7 +194,14 @@ async function bumpReportBadge() {
     const { getReports } = await import("./api.js");
     const reports = await getReports();
     const badge = document.getElementById("navReportCount");
-    if (badge && reports.length) { badge.hidden = false; badge.textContent = String(reports.length); }
+    if (!badge) return;
+    if (reports.length) {
+      badge.hidden = false;
+      badge.textContent = String(reports.length);
+    } else {
+      badge.hidden = true;
+      badge.textContent = "";
+    }
   } catch { /* cosmetic */ }
 }
 
@@ -223,17 +214,18 @@ export async function boot() {
   applyStaticStrings();
   paintIcons();
   renderState(state);
-  lastMode = `${state.mode}|${state.offline}|${state.apiDown}`;
+  lastSignature = `${state.mode}|${state.offline}|${state.apiDown}|${liveAdapterCount(state)}`;
   await navigate(true);
   wireStream();
   window.addEventListener("hashchange", () => navigate());
   window.addEventListener("daggers:modechange", () => navigate(true));
   bumpReportBadge();
+  getGuardStats().catch(() => {});
 
   // share-target landing: /share?url=…&text=…&title=…
   if (/\/(share)\/?$/.test(location.pathname) && !location.hash) {
-    const sp = new URLSearchParams(location.search);
-    const shared = sp.get("url") || sp.get("text") || sp.get("title") || "";
+    const params = new URLSearchParams(location.search);
+    const shared = params.get("url") || params.get("text") || params.get("title") || "";
     sessionStorage.setItem("daggers:share", shared);
     location.replace(`${location.pathname}#/check`);
   } else if (!location.hash) {

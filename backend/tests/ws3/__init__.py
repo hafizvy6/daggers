@@ -1,1 +1,1 @@
-"""WS3 integration tests."""
+"""PWA/AI/portal test suite."""

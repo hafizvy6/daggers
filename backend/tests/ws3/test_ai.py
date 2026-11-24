@@ -1,4 +1,4 @@
-"""WS3 · AI Analyst tests — the rules that must never break.
+"""AI Analyst tests — the rules that must never break.
 
 1. input is Report.evidence only (privacy filter drops anything else)
 2. AI never writes verdict / score / reasons (template + prompt contract)

@@ -1,6 +1,6 @@
-# SYNTHETIC TEST FIXTURE — fabricated entities on .example domains. Never load in production.
+# SYNTHETIC UNIT-TEST DOUBLE — fabricated entities on .example domains. Never load in production.
 schema_version: 1
-registry_name: SYNTHETIC TEST FIXTURE registry
+registry_name: SYNTHETIC UNIT-TEST DOUBLE registry
 entries:
 - id: syn-police
   organization: Synthetic Police
@@ -30,7 +30,7 @@ entries:
   - url: https://police.gov.example/news
     kind: html
     terms_reviewed: true
-  provenance: SYNTHETIC TEST FIXTURE — fabricated entity for automated tests; not a real UAE authority
+  provenance: SYNTHETIC UNIT-TEST DOUBLE — fabricated entity for automated tests; not a real UAE authority
   status: approved
   reviewer: SYNTHETIC-TEST-REVIEWER
   verified_at: '2026-11-01T00:00:00Z'
@@ -65,7 +65,7 @@ entries:
   - url: https://sira.gov.example/news
     kind: html
     terms_reviewed: true
-  provenance: SYNTHETIC TEST FIXTURE — fabricated entity for automated tests; not a real UAE authority
+  provenance: SYNTHETIC UNIT-TEST DOUBLE — fabricated entity for automated tests; not a real UAE authority
   status: approved
   reviewer: SYNTHETIC-TEST-REVIEWER
   verified_at: '2026-11-01T00:00:00Z'
@@ -98,7 +98,7 @@ entries:
   - url: https://moss.gov.example/news
     kind: html
     terms_reviewed: true
-  provenance: SYNTHETIC TEST FIXTURE — fabricated entity for automated tests; not a real UAE authority
+  provenance: SYNTHETIC UNIT-TEST DOUBLE — fabricated entity for automated tests; not a real UAE authority
   status: approved
   reviewer: SYNTHETIC-TEST-REVIEWER
   verified_at: '2026-11-01T00:00:00Z'
@@ -128,7 +128,7 @@ entries:
   - url: https://housing.gov.example/news
     kind: html
     terms_reviewed: true
-  provenance: SYNTHETIC TEST FIXTURE — fabricated entity for automated tests; not a real UAE authority
+  provenance: SYNTHETIC UNIT-TEST DOUBLE — fabricated entity for automated tests; not a real UAE authority
   status: approved
   reviewer: SYNTHETIC-TEST-REVIEWER
   verified_at: '2026-11-01T00:00:00Z'
@@ -161,7 +161,7 @@ entries:
   - url: https://sta.gov.example/news
     kind: html
     terms_reviewed: true
-  provenance: SYNTHETIC TEST FIXTURE — fabricated entity for automated tests; not a real UAE authority
+  provenance: SYNTHETIC UNIT-TEST DOUBLE — fabricated entity for automated tests; not a real UAE authority
   status: approved
   reviewer: SYNTHETIC-TEST-REVIEWER
   verified_at: '2026-11-01T00:00:00Z'
@@ -194,7 +194,7 @@ entries:
   - url: https://portal.gov.example/news
     kind: html
     terms_reviewed: true
-  provenance: SYNTHETIC TEST FIXTURE — fabricated entity for automated tests; not a real UAE authority
+  provenance: SYNTHETIC UNIT-TEST DOUBLE — fabricated entity for automated tests; not a real UAE authority
   status: approved
   reviewer: SYNTHETIC-TEST-REVIEWER
   verified_at: '2026-11-01T00:00:00Z'
@@ -224,7 +224,7 @@ entries:
   - url: https://news.gov.example/news
     kind: html
     terms_reviewed: true
-  provenance: SYNTHETIC TEST FIXTURE — fabricated entity for automated tests; not a real UAE authority
+  provenance: SYNTHETIC UNIT-TEST DOUBLE — fabricated entity for automated tests; not a real UAE authority
   status: approved
   reviewer: SYNTHETIC-TEST-REVIEWER
   verified_at: '2026-11-01T00:00:00Z'
@@ -253,7 +253,7 @@ entries:
   - url: https://syntheticdaily.example/news
     kind: html
     terms_reviewed: true
-  provenance: SYNTHETIC TEST FIXTURE — fabricated entity for automated tests; not a real UAE authority
+  provenance: SYNTHETIC UNIT-TEST DOUBLE — fabricated entity for automated tests; not a real UAE authority
   status: approved
   reviewer: SYNTHETIC-TEST-REVIEWER
   verified_at: '2026-11-01T00:00:00Z'
@@ -282,7 +282,7 @@ entries:
   - url: https://pending.gov.example/news
     kind: html
     terms_reviewed: true
-  provenance: SYNTHETIC TEST FIXTURE — fabricated entity for automated tests; not a real UAE authority
+  provenance: SYNTHETIC UNIT-TEST DOUBLE — fabricated entity for automated tests; not a real UAE authority
   status: pending
   reviewer: null
   verified_at: null
@@ -311,7 +311,7 @@ entries:
   - url: https://revoked.gov.example/news
     kind: html
     terms_reviewed: true
-  provenance: SYNTHETIC TEST FIXTURE — fabricated entity for automated tests; not a real UAE authority
+  provenance: SYNTHETIC UNIT-TEST DOUBLE — fabricated entity for automated tests; not a real UAE authority
   status: revoked
   reviewer: SYNTHETIC-TEST-REVIEWER
   verified_at: '2026-11-01T00:00:00Z'
@@ -341,7 +341,7 @@ entries:
   - url: https://expired.gov.example/news
     kind: html
     terms_reviewed: true
-  provenance: SYNTHETIC TEST FIXTURE — fabricated entity for automated tests; not a real UAE authority
+  provenance: SYNTHETIC UNIT-TEST DOUBLE — fabricated entity for automated tests; not a real UAE authority
   status: approved
   reviewer: SYNTHETIC-TEST-REVIEWER
   verified_at: '2025-01-01T00:00:00Z'

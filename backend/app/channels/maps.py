@@ -1,10 +1,10 @@
-"""Maps channel adapter (fixture-first; optional authorized Google Places).
+"""Maps channel adapter (authorized Google Places only).
 
 Each listing gets SEPARATE evidence for three checks:
   * identity — does the listing name claim a government entity / known brand, and
                does its website actually belong to it?
   * website  — the shared scorer + trust policy (same path as every other surface)
-  * phone    — WS1's existing offline number check (``core.numbers``)
+  * phone    — the deterministic number check (``core.numbers``)
 
 Missing business information is reported as ``not_provided``; it is never
 treated as evidence of fraud. Listing data is business data from a third-party
@@ -18,7 +18,6 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Callable
 
 from ..core import numbers as ws1_numbers
@@ -28,7 +27,6 @@ from .http_client import ProviderError
 from .http_client import request as http_request
 from .official.models import iso
 
-FIXTURE_DIR = Path(__file__).resolve().with_name("fixtures") / "maps"
 PLACES_FIELDS = (
     "places.id,places.displayName,places.formattedAddress,places.websiteUri,"
     "places.internationalPhoneNumber,places.primaryType,places.businessStatus"
@@ -47,25 +45,10 @@ class Listing:
     category: str = ""
     business_status: str = ""
     synthetic: bool = False
+    source_kind: str = "live"
 
 
-class FixtureMapsProvider:
-    name, source_kind = "fixture", "fixture"
-
-    def __init__(self, directory: Path = FIXTURE_DIR) -> None:
-        self.directory = directory
-
-    def search(self, query: str, lang: str, limit: int) -> list[Listing]:
-        payload = json.loads((self.directory / "listings.json").read_text(encoding="utf-8"))
-        bucket = payload["queries"].get(urls.normalize_query(query).casefold()) or payload["queries"]["_default"]
-        return [
-            Listing("fixture", i["place_id"], i["name"], i.get("address", ""), i.get("website"), i.get("phone"),
-                    i.get("category", ""), i.get("business_status", ""), True)
-            for i in bucket[:limit]
-        ]
-
-
-class GooglePlacesProvider:  # live path is not exercised in this environment
+class GooglePlacesProvider:
     name, source_kind = "google_places", "live"
 
     def __init__(self, api_key: str, http: Callable = http_request) -> None:
@@ -95,7 +78,6 @@ def default_maps_providers(env: dict | None = None) -> list:
     providers: list = []
     if env.get("MAPS_LIVE_ENABLED", "0") == "1" and env.get("GOOGLE_PLACES_API_KEY"):
         providers.append(GooglePlacesProvider(env["GOOGLE_PLACES_API_KEY"]))
-    providers.append(FixtureMapsProvider())
     return providers
 
 
@@ -110,16 +92,18 @@ class MapsChannel:
 
     def _listings(self, query: str, lang: str, limit: int) -> tuple[list[Listing], str, str, list[str]]:
         errors: list[str] = []
+        if not self.providers:
+            return [], "none", "unconfigured", ["maps: no live provider configured"]
         for provider in self.providers:
             try:
                 found = provider.search(query, lang, limit)
             except (ProviderError, ValueError, KeyError, OSError) as exc:
                 errors.append(f"{provider.name}: {type(exc).__name__}")
                 continue
-            if found or provider.source_kind == "fixture":
+            if found:
                 return found, provider.name, provider.source_kind, errors
             errors.append(f"{provider.name}: no results")
-        return [], "none", "fixture", errors
+        return [], "none", "unavailable", errors
 
     def _identity(self, listing: Listing, website_result: dict | None) -> dict:
         named = [e for e in self.scorer.registry.resolve_entities(listing.name) if e.source_class != "C"]
@@ -190,6 +174,7 @@ class MapsChannel:
                 "phone": listing.phone,
                 "retrieved_at": retrieved_at,
                 "is_synthetic": listing.synthetic,
+                "source_kind": listing.source_kind,
                 "evidence_type": "third_party_listing",
             },
             "checks": {"identity": identity, "website": website_check, "phone": phone_check},

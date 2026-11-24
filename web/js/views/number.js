@@ -1,6 +1,6 @@
 /* Daggers · Number check — before you answer (plan Scenario 8). Offline rules. */
 import { t, reasonsOf } from "../i18n/i18n.js";
-import { scan, state, tagFor, getExamples } from "../api.js";
+import { scan, tagFor, getExamples } from "../api.js";
 import { el, tagChip, reasonChip } from "../components/tag.js";
 import { emptyState } from "../components/empty.js";
 import { pageHead, card } from "./_shared.js";
@@ -26,15 +26,17 @@ export default async function NumberView() {
   form.append(el("div", { class: "field" },
     el("label", { for: "numberInput", text: t("number.inputLabel") }),
     el("div", { class: "input-row" }, input, btn)));
-  const exRow = el("div", { class: "pill-row" },
+  const exRow = el("div", { class: "pill-row", hidden: true },
     el("span", { class: "muted", style: "font-size:var(--fs-xs); align-self:center", text: t("number.examplesTitle") }));
   getExamples().then((ex) => {
-    for (const n of ex.numbers || []) {
-      const b = el("button", { type: "button", class: "query-pill mono ltr", text: n });
-      b.addEventListener("click", () => { input.value = n; input.focus(); });
+    const numbers = Array.isArray(ex.numbers) ? ex.numbers : [];
+    numbers.forEach((number) => {
+      const b = el("button", { type: "button", class: "query-pill mono ltr", text: number });
+      b.addEventListener("click", () => { input.value = number; input.focus(); });
       exRow.append(b);
-    }
-  }).catch(() => { /* offline with no cache */ });
+    });
+    exRow.hidden = numbers.length === 0;
+  }).catch(() => { exRow.hidden = true; });
   form.append(exRow);
 
   const verdictHost = el("div");

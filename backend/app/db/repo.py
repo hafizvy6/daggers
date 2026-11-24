@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import shutil
 import sqlite3
 import threading
 from datetime import datetime, timezone
@@ -47,7 +46,7 @@ def _json(value: Any) -> str:
 
 
 def _json_with_default(value: Any) -> str:
-    """JSON for WS2 additive sweep fields; unusual objects degrade to strings."""
+    """JSON for additive sweep fields; unusual objects degrade to strings."""
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"), default=str)
 
 
@@ -92,16 +91,14 @@ def canonical_report(value: Mapping[str, Any]) -> dict:
 
 
 class Repository:
-    """All SQL and all fixture/database orchestration lives here."""
+    """All SQL and all SQLite orchestration lives here. No seed data is inserted."""
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.db_path = settings.db_path
         self.evidence_dir = settings.evidence_dir
-        self.seed_dir = settings.seed_dir
         self._conn: sqlite3.Connection | None = None
         self._lock = threading.RLock()
-        self._fixture_cache: dict[str, object] = {}
 
     # ------------------------------------------------------------------ boot
 
@@ -117,7 +114,7 @@ class Repository:
                 self._conn.execute("PRAGMA journal_mode=WAL")
                 self._conn.execute("PRAGMA foreign_keys=ON")
                 self._conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
-                # Additive migration for WS1 databases created before WS2 landed.
+                # Additive migration for databases created before the sweep columns landed.
                 columns = {
                     str(row["name"])
                     for row in self._conn.execute("PRAGMA table_info(sweep_results)").fetchall()
@@ -139,88 +136,6 @@ class Repository:
             self.initialize()
         assert self._conn is not None
         return self._conn
-
-    def _fixture(self, name: str) -> list[dict]:
-        key = f"fixtures/{name}"
-        if key in self._fixture_cache:
-            return list(self._fixture_cache[key])  # type: ignore[arg-type]
-        path = self.seed_dir / "fixtures" / name
-        if not path.exists():
-            self._fixture_cache[key] = []
-            return []
-        data = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(data, list):
-            data = []
-        self._fixture_cache[key] = data
-        return list(data)
-
-    def demo_findings(self) -> list[dict]:
-        rows = [canonical_finding(row) for row in self._fixture("feed.json")]
-        return sorted(rows, key=lambda row: (row["first_seen"], row["id"]), reverse=True)
-
-    def demo_reports(self) -> list[dict]:
-        return [canonical_report(row) for row in self._fixture("reports.json")]
-
-    def seed(self, *, force: bool = False) -> dict:
-        """Idempotent seed-on-boot into SQLite WAL; also materializes evidence assets."""
-        if self._conn is None:
-            self.initialize()
-        if not force and self.get_meta("seeded_at"):
-            self.ensure_assets()
-            return {"seeded": False, "findings": len(self.demo_findings())}
-
-        findings = self.demo_findings()
-        reports = self.demo_reports()
-        for finding in findings:
-            self.insert_finding(
-                finding_id=finding["id"],
-                domain=finding["domain"],
-                source=finding["source"],
-                first_seen=finding["first_seen"],
-                cert_issued=finding["cert_issued"],
-                score=finding["score"],
-                verdict=finding["verdict"],
-                reasons=finding["reasons"],
-                l1_detail={},
-                rendered=True,
-                evidence_path=finding["evidence_url"],
-                gallery_match=finding["gallery_match"],
-                clone_score=finding["clone"],
-                created_at=finding["first_seen"],
-                is_case_file=finding["is_case_file"],
-                enqueued=True,
-            )
-        for report in reports:
-            self.insert_report(
-                report_id=report["id"],
-                finding_id=report["finding_id"],
-                evidence=report["evidence"],
-                status=report["status"],
-                auto=report["auto"],
-                filed_at=report["filed_at"],
-                blocked_hits=report["blocked_hits"],
-            )
-        confirmed = [
-            str(item.get("domain"))
-            for item in self._fixture("phishtank.json")
-            if isinstance(item, dict) and item.get("domain")
-        ]
-        if confirmed:
-            self.upsert_feed_labels(confirmed, source="fixture")
-        now = utc_now()
-        self.set_meta("seeded_at", now)
-        self.set_meta("mode", self.settings.mode)
-        self.set_meta("crt_cursor", "0")
-        self.set_meta("feed_cursor", "0")
-        self.ensure_assets()
-        return {"seeded": True, "findings": len(findings), "reports": len(reports)}
-
-    def ensure_assets(self) -> None:
-        self.evidence_dir.mkdir(parents=True, exist_ok=True)
-        for finding in self.demo_findings():
-            if not finding["evidence_url"]:
-                continue
-            self.ensure_evidence_file(finding["id"], "demo")
 
     # ------------------------------------------------------------- meta + domains
 
@@ -339,9 +254,7 @@ class Repository:
             }
         )
 
-    def get_finding(self, finding_id: int, mode: str = "live") -> dict | None:
-        if mode == "demo":
-            return next((row for row in self.demo_findings() if row["id"] == int(finding_id)), None)
+    def get_finding(self, finding_id: int) -> dict | None:
         with self._lock:
             row = self.conn.execute(
                 "SELECT f.id, d.domain, f.verdict, f.score, f.reasons, "
@@ -353,10 +266,8 @@ class Repository:
             ).fetchone()
         return self._row_to_finding(row) if row else None
 
-    def get_findings(self, limit: int = 50, mode: str = "live") -> list[dict]:
+    def get_findings(self, limit: int = 50) -> list[dict]:
         limit = max(1, min(int(limit), 200))
-        if mode == "demo":
-            return self.demo_findings()[:limit]
         with self._lock:
             rows = self.conn.execute(
                 "SELECT f.id, d.domain, f.verdict, f.score, f.reasons, "
@@ -428,7 +339,7 @@ class Repository:
                     (int(finding_id), *values),
                 )
                 new_id = int(finding_id)
-        return self.get_finding(new_id, "live") or canonical_finding({"id": new_id, "domain": domain})
+        return self.get_finding(new_id) or canonical_finding({"id": new_id, "domain": domain})
 
     def set_finding_evidence(self, finding_id: int, evidence_url: str) -> dict | None:
         with self._lock, self.conn:
@@ -436,7 +347,7 @@ class Repository:
                 "UPDATE findings SET evidence_path = ?, rendered = 1 WHERE id = ?",
                 (evidence_url, int(finding_id)),
             )
-        return self.get_finding(finding_id, "live")
+        return self.get_finding(finding_id)
 
     def update_finding_analysis(
         self,
@@ -469,36 +380,23 @@ class Repository:
                     int(finding_id),
                 ),
             )
-        return self.get_finding(finding_id, "live")
+        return self.get_finding(finding_id)
 
-    def evidence_path(self, finding_id: int, mode: str = "live") -> Path | None:
-        finding = self.get_finding(int(finding_id), mode)
+    def evidence_path(self, finding_id: int) -> Path | None:
+        finding = self.get_finding(int(finding_id))
         if not finding or not finding["evidence_url"]:
             return None
         url = str(finding["evidence_url"])
         return self.evidence_dir / Path(url).name
 
-    def ensure_evidence_file(self, finding_id: int, mode: str = "live") -> Path | None:
-        finding = self.get_finding(int(finding_id), mode)
-        if finding is None:
-            return None
-        destination = self.evidence_path(int(finding_id), mode)
+    def ensure_evidence_file(self, finding_id: int) -> Path | None:
+        """Return an existing real evidence file, or None. Never invent one."""
+        destination = self.evidence_path(int(finding_id))
         if destination is None:
             return None
-        if destination.exists() and destination.stat().st_size > 0:
-            return destination
-        bundled = self.seed_dir / "casefiles" / "evidence" / f"{int(finding_id)}.jpg"
-        if bundled.exists():
-            shutil.copyfile(bundled, destination)
-            return destination
-        try:
-            from ..vision.diff import ensure_evidence_image
+        return destination if destination.exists() and destination.stat().st_size > 0 else None
 
-            return ensure_evidence_image(finding, destination, self.settings.gallery_dir)
-        except Exception:
-            return None
-
-    def find_evidence_url(self, domain: str, mode: str = "live") -> str | None:
+    def find_evidence_url(self, domain: str) -> str | None:
         def same(left: str, right: str) -> bool:
             left_forms = homograph.host_forms(left)
             right_forms = homograph.host_forms(right)
@@ -506,11 +404,6 @@ class Repository:
             right_set = {str(right_forms["unicode_host"]), str(right_forms["punycode_host"])}
             return bool(left_set & right_set)
 
-        if mode == "demo":
-            for finding in self.demo_findings():
-                if finding["evidence_url"] and same(str(domain), finding["domain"]):
-                    return str(finding["evidence_url"])
-            return None
         with self._lock:
             rows = self.conn.execute(
                 "SELECT d.domain, f.evidence_path FROM findings f JOIN domains d ON d.id = f.domain_id "
@@ -523,28 +416,24 @@ class Repository:
 
     # ------------------------------------------------------------------ guard
 
-    def get_guard_rows(self, mode: str = "live", guard_block_misleading: bool = False) -> list[dict]:
+    def get_guard_rows(self, guard_block_misleading: bool = False) -> list[dict]:
         verdicts = ["MALICIOUS", "MISLEADING"] if guard_block_misleading else ["MALICIOUS"]
-        timestamps: dict[int, str] = {}
-        if mode == "demo":
-            findings = [row for row in self.demo_findings() if row["verdict"] in verdicts]
-        else:
-            placeholders = ",".join("?" for _ in verdicts)
-            with self._lock:
-                rows = self.conn.execute(
-                    f"SELECT f.id, d.domain, f.verdict, f.score, f.reasons, "
-                    f"COALESCE(d.tls_issued, f.created_at) AS cert_issued, d.first_seen, d.source, "
-                    f"COALESCE(f.clone_score, 0) AS clone, f.evidence_path AS evidence_url, "
-                    f"f.gallery_match, f.is_case_file, f.created_at "
-                    f"FROM findings f JOIN domains d ON d.id = f.domain_id "
-                    f"WHERE f.verdict IN ({placeholders}) AND f.id = ("
-                    f"SELECT MAX(f2.id) FROM findings f2 WHERE f2.domain_id = f.domain_id "
-                    f"AND f2.verdict IN ({placeholders})) "
-                    f"ORDER BY f.created_at DESC, f.id DESC",
-                    (*verdicts, *verdicts),
-                ).fetchall()
-            findings = [self._row_to_finding(row) for row in rows]
-            timestamps = {int(row["id"]): str(row["created_at"]) for row in rows}
+        placeholders = ",".join("?" for _ in verdicts)
+        with self._lock:
+            rows = self.conn.execute(
+                f"SELECT f.id, d.domain, f.verdict, f.score, f.reasons, "
+                f"COALESCE(d.tls_issued, f.created_at) AS cert_issued, d.first_seen, d.source, "
+                f"COALESCE(f.clone_score, 0) AS clone, f.evidence_path AS evidence_url, "
+                f"f.gallery_match, f.is_case_file, f.created_at "
+                f"FROM findings f JOIN domains d ON d.id = f.domain_id "
+                f"WHERE f.verdict IN ({placeholders}) AND f.id = ("
+                f"SELECT MAX(f2.id) FROM findings f2 WHERE f2.domain_id = f.domain_id "
+                f"AND f2.verdict IN ({placeholders})) "
+                f"ORDER BY f.created_at DESC, f.id DESC",
+                (*verdicts, *verdicts),
+            ).fetchall()
+        findings = [self._row_to_finding(row) for row in rows]
+        timestamps = {int(row["id"]): str(row["created_at"]) for row in rows}
         seen: set[str] = set()
         guard_rows: list[dict] = []
         for finding in findings:
@@ -558,27 +447,23 @@ class Repository:
                     "domain": punycode,
                     "verdict": finding["verdict"],
                     "reason": (finding["reasons"] or ["confirmed by deterministic evidence"])[0],
-                    "flagged_at": timestamps.get(finding["id"], finding["first_seen"])
-                    if mode != "demo"
-                    else finding["first_seen"],
+                    "flagged_at": timestamps.get(finding["id"], finding["first_seen"]),
                 }
             )
         return guard_rows
 
-    def guard_stats(self, mode: str = "live", guard_block_misleading: bool = False) -> dict:
-        rows = self.get_guard_rows(mode, guard_block_misleading)
+    def guard_stats(self, guard_block_misleading: bool = False) -> dict:
+        rows = self.get_guard_rows(guard_block_misleading)
         with self._lock:
             hit_row = self.conn.execute("SELECT COALESCE(SUM(count), 0) AS total FROM guard_hits").fetchone()
         total_hits = int(hit_row["total"]) if hit_row else 0
-        if mode == "demo":
-            total_hits += sum(report["blocked_hits"] for report in self.demo_reports())
         return {
             "blocked_domains": len(rows),
             "blocked_hits": total_hits,
-            # WS3 guard view aliases; WS1 keys remain authoritative.
+            # Guard view aliases; the original keys remain authoritative.
             "blocked_today": total_hits,
             "feed_size": len(rows),
-            "mode": mode,
+            "mode": "live",
         }
 
     def record_guard_hit(self, domain: str) -> int:
@@ -803,15 +688,8 @@ class Repository:
 
     # ------------------------------------------------------------------ status
 
-    def counts(self, mode: str = "live") -> dict[str, int]:
+    def counts(self) -> dict[str, int]:
         evidence_files = len(list(self.evidence_dir.glob("*.jpg")))
-        if mode == "demo":
-            findings = self.demo_findings()
-            return {
-                "domains": len({row["domain"] for row in findings}),
-                "findings": len(findings),
-                "evidence": evidence_files,
-            }
         with self._lock:
             domain_count = self.conn.execute("SELECT COUNT(*) AS n FROM domains").fetchone()["n"]
             finding_count = self.conn.execute("SELECT COUNT(*) AS n FROM findings").fetchone()["n"]

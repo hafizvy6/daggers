@@ -1,13 +1,13 @@
 """Search channel adapter.
 
-Provider chain (first success wins):
-  1. Serper (Google results)  — only when SEARCH_LIVE_ENABLED=1 and SERPER_API_KEY is set
-  2. DuckDuckGo HTML          — only when SEARCH_LIVE_ENABLED=1
-  3. Fixtures                 — always available; results are SYNTHETIC and labelled so
+Provider chain (first success wins), only when SEARCH_LIVE_ENABLED=1:
+  1. Serper (Google results)  — when SERPER_API_KEY is set
+  2. DuckDuckGo HTML          — keyless fallback live source
 
 Every result is normalized, deduplicated, PII-redacted, and scored by the shared
-WS1 brain + WS2 trust policy (``ShieldScorer``). There is no separate scoring
-engine here. Each run reports ``source_kind``: ``live`` | ``cached`` | ``fixture``.
+Shared brain + trust policy (``ShieldScorer``). There is no separate scoring
+engine here. With no live provider configured the run is empty and source_kind
+is ``unconfigured``; a configured provider that fails is ``unavailable``.
 """
 from __future__ import annotations
 
@@ -17,7 +17,6 @@ import threading
 import time
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
-from pathlib import Path
 from typing import Callable, Protocol
 from urllib.parse import urlencode
 
@@ -25,7 +24,6 @@ from . import privacy, urls
 from .http_client import ProviderError
 from .http_client import request as http_request
 
-FIXTURE_DIR = Path(__file__).resolve().with_name("fixtures") / "search"
 MAX_RESULTS = 10
 
 
@@ -41,7 +39,7 @@ class SearchRun:
     query: str
     lang: str
     engine: str
-    source_kind: str  # live | cached | fixture
+    source_kind: str  # live | cached | unconfigured | unavailable
     cached: bool
     results: list[dict] = field(default_factory=list)
     rejected: int = 0
@@ -125,21 +123,6 @@ class DuckDuckGoProvider:
         return parse_ddg_html(body.decode("utf-8", errors="replace"))[:limit]
 
 
-class FixtureProvider:
-    """SYNTHETIC TEST FIXTURE results; never presented as live."""
-
-    name, source_kind = "fixture", "fixture"
-
-    def __init__(self, directory: Path = FIXTURE_DIR) -> None:
-        self.directory = directory
-
-    def search(self, query: str, lang: str, limit: int) -> list[RawResult]:
-        payload = json.loads((self.directory / "results.json").read_text(encoding="utf-8"))
-        key = urls.normalize_query(query).casefold()
-        bucket = payload["queries"].get(key) or payload["queries"]["_default"]
-        return [RawResult(r["url"], r.get("title", ""), r.get("snippet", "")) for r in bucket[:limit]]
-
-
 class TTLCache:
     def __init__(self, ttl_s: float = 900, max_items: int = 256, clock: Callable[[], float] = time.monotonic):
         self.ttl_s, self.max_items, self.clock = ttl_s, max_items, clock
@@ -168,7 +151,6 @@ def default_providers(env: dict | None = None) -> list:
         if env.get("SERPER_API_KEY"):
             providers.append(SerperProvider(env["SERPER_API_KEY"]))
         providers.append(DuckDuckGoProvider())
-    providers.append(FixtureProvider())
     return providers
 
 
@@ -180,6 +162,8 @@ class SearchChannel:
 
     def _fetch(self, query: str, lang: str, limit: int) -> tuple[list[RawResult], str, str, bool, list[str]]:
         errors: list[str] = []
+        if not self.providers:
+            return [], "none", "unconfigured", False, ["search: no live provider configured"]
         for provider in self.providers:
             key = (provider.name, query.casefold(), lang, limit)
             if provider.source_kind == "live":
@@ -197,7 +181,7 @@ class SearchChannel:
                     continue
                 self.cache.put(key, raw)
             return raw, provider.name, provider.source_kind, False, errors
-        return [], "none", "fixture", False, errors
+        return [], "none", "unavailable", False, errors
 
     def run(self, query: str, lang: str = "en", limit: int = MAX_RESULTS) -> SearchRun:
         query = urls.normalize_query(query)

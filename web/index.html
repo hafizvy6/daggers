@@ -36,10 +36,10 @@
         <span class="dot" aria-hidden="true"></span>
         <span class="hb-label mono" id="hbLabel">live</span>
       </span>
-      <div class="seg" id="modeToggle" role="group" data-i18n-aria="top.modeLive" aria-label="Mode">
-        <button type="button" data-mode="live" aria-pressed="true">LIVE</button>
-        <button type="button" data-mode="demo" aria-pressed="false">DEMO</button>
-      </div>
+      <span class="chip" id="connectionChip" role="status" data-i18n-aria="top.modeLive" aria-label="LIVE">
+        <span class="chip-k" aria-hidden="true">●</span>
+        <span class="mono" id="connectionLabel" data-i18n="top.modeLive">LIVE</span>
+      </span>
       <div class="lang-switch" id="langSwitch" role="group" data-i18n-aria="top.switchLang" aria-label="Language">
         <button type="button" data-lang="en" aria-pressed="true">EN</button>
         <button type="button" data-lang="ar" aria-pressed="false" lang="ar">ع</button>
@@ -48,7 +48,7 @@
   </header>
 
   <div class="banner" id="banner" role="status">
-    <span class="banner-tag" id="bannerTag">OFFLINE</span>
+    <span class="banner-tag" id="bannerTag" data-i18n="top.offlineTag">OFFLINE</span>
     <span id="bannerText"></span>
   </div>
 

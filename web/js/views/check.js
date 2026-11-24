@@ -43,16 +43,18 @@ export default async function Check(ctx) {
   form.append(field, el("div", { class: "row" }, btn,
     el("span", { class: "field-hint", style: "margin-inline-start:var(--s2)", text: state.offline ? t("check.offlineNote") : "" })));
 
-  // sample inputs are fixture data (web/fixtures/examples.json), labels are i18n keys
-  const examples = el("div", { class: "row", style: "margin-block-start:var(--s2)" },
+  // Optional canonical query presets come from the live service.
+  const examples = el("div", { class: "row", style: "margin-block-start:var(--s2)", hidden: true },
     el("span", { class: "muted", style: "font-size:var(--fs-xs)", text: t("check.examplesTitle") }));
   getExamples().then((ex) => {
-    for (const item of ex.check || []) {
+    const items = Array.isArray(ex.check) ? ex.check : [];
+    items.forEach((item) => {
       const b = el("button", { type: "button", class: "query-pill", text: t(item.label_key) });
       b.addEventListener("click", () => { input.value = item.payload; input.focus(); });
       examples.append(b);
-    }
-  }).catch(() => { /* offline with no cache: pills simply don't render */ });
+    });
+    examples.hidden = items.length === 0;
+  }).catch(() => { examples.hidden = true; });
   form.append(examples);
 
   const verdictHost = el("div");
@@ -107,7 +109,6 @@ function verdictCard(res) {
           el("span", { class: "val ltr", text: (res.score || 0).toFixed(2) }),
         ),
         res.scam_type ? chip(t("common.source"), res.scam_type) : null,
-        res.offline_capable && state.offline ? chip(t("common.offlineShort"), t("common.rulesShort")) : null,
       ),
     ),
   );
@@ -124,7 +125,7 @@ function verdictCard(res) {
 
   if (res.evidence_url) {
     c.append(el("div", { style: "margin-block-start:var(--s4)" },
-      evidenceFrame({ evidence_url: res.evidence_url, domain: res.input, clone: 97, brand: "ADCB" }, { compact: true })));
+      evidenceFrame({ evidence_url: res.evidence_url, domain: res.input }, { compact: true })));
     c.append(el("p", { class: "muted", style: "font-size:var(--fs-xs); margin-block-start:var(--s2)", text: t("check.evidenceNote") }));
   }
 

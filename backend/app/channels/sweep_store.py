@@ -1,12 +1,11 @@
 """Sweep persistence behind one interface.
 
-``RepoSweepStore`` uses WS1 repository methods when WS1 has added them (see
-docs/WS2.md → "Repository methods needed"). Until then ``InMemorySweepStore``
-is used. **The in-memory store is TEMPORARY**: runs are lost on restart and are
-capped in number. Both stores return the same contract.
+``RepoSweepStore`` persists runs through the shared repository (``db/repo.py``),
+which is the production path. ``InMemorySweepStore`` exists only as a fallback
+for a repository that does not expose the sweep methods (e.g. some test doubles).
 
-Row shape mirrors the existing ``sweep_runs`` / ``sweep_results`` schema; WS2's
-additive fields (tag, domain_auth, …) travel in ``detail``.
+Row shape mirrors the ``sweep_runs`` / ``sweep_results`` schema; additive fields
+(tag, domain_auth, …) travel in ``detail``.
 """
 from __future__ import annotations
 
@@ -27,7 +26,7 @@ class SweepStore(Protocol):
 
 
 class InMemorySweepStore:
-    """TEMPORARY in-process store (no SQL). Oldest runs are evicted past ``max_runs``."""
+    """In-process store without SQL — only for repositories lacking sweep methods. Oldest runs are evicted past ``max_runs``."""
 
     backend = "memory-temporary"
 
@@ -61,7 +60,7 @@ class InMemorySweepStore:
 
 
 class RepoSweepStore:
-    """Adapter over WS1 ``Repository`` sweep methods (only once WS1 provides them)."""
+    """Adapter over the shared ``Repository`` sweep methods."""
 
     backend = "sqlite"
 

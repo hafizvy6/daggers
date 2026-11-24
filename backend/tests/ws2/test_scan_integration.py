@@ -1,5 +1,4 @@
-"""The adapter that WS1 patch 0001 calls from Runtime.scan — tested directly, so the
-policy is proven even before WS1 merges the patch. SYNTHETIC TEST FIXTUREs only."""
+"""The adapter ``Runtime.scan`` calls — tested directly. SYNTHETIC unit-test doubles only."""
 from __future__ import annotations
 
 import unittest
@@ -19,7 +18,7 @@ class TestApplyToScanResult(unittest.TestCase):
     def apply(self, kind, value):
         base = ws1_scan(kind, value)
         out = self.shield.apply_to_scan_result(dict(base), kind=kind, input_value=value)
-        for key in base:  # WS1 fields are never modified
+        for key in base:  # core fields are never modified
             self.assertEqual(out[key], base[key], key)
         return out
 
@@ -30,9 +29,9 @@ class TestApplyToScanResult(unittest.TestCase):
     def test_authenticated_url_can_be_safe(self):
         self.assertEqual(self.apply("url", "https://police.gov.example/")["tag"], "SAFE")
 
-    def test_ws1_brand_allowlisted_bank_is_not_safe_without_registry(self):
+    def test_brand_allowlisted_bank_is_not_safe_without_registry(self):
         out = self.apply("url", "https://adcb.ae/login")
-        self.assertEqual(out["verdict"], "UNKNOWN")  # WS1 allowlist: no impersonation signals
+        self.assertEqual(out["verdict"], "UNKNOWN")  # brand allowlist: no impersonation signals
         self.assertEqual(out["tag"], "WARNING")      # …but not an authenticated official source
 
     def test_malicious_url_is_fake(self):

@@ -36,12 +36,15 @@ export default async function Sweep() {
   }).catch(() => { /* offline with no cache: type your own query */ });
   function paintQueries() {
     const list = channel === "maps" ? querySets.maps : querySets.web;
-    pills.replaceChildren(...list.map((x) => {
+    const buttons = list.map((x) => {
       const p = el("button", { class: "query-pill", type: "button" },
         el("span", { class: "pill-lang", text: x.lang.toUpperCase() }), el("span", { text: x.q }));
-      p.addEventListener("click", () => { queryInput.value = x.q; runSweep(x.q); });
+      p.addEventListener("click", () => { queryInput.value = x.q; runSweep(x.q, x.query_id); });
       return p;
-    }));
+    });
+    pills.replaceChildren(...(buttons.length ? buttons : [
+      el("span", { class: "muted", style: "font-size:var(--fs-xs)", text: t("sweep.noQueries") }),
+    ]));
   }
   const controls = card(null, "",
     el("div", { class: "stack" },
@@ -55,8 +58,9 @@ export default async function Sweep() {
 
   const resultsHost = el("div", { class: "stack" });
   const resultsCard = el("div", { class: "card flush" }, resultsHost);
+  const afterHost = el("div", { class: "stack" });
 
-  root.append(controls, el("h2", { style: "margin-block-start:var(--s4)", id: "sweepResultsTitle", text: t("sweep.resultsTitle") }), resultsCard);
+  root.append(controls, el("h2", { style: "margin-block-start:var(--s4)", id: "sweepResultsTitle", text: t("sweep.resultsTitle") }), resultsCard, afterHost);
 
   function emptyPanel() {
     return emptyState({
@@ -65,14 +69,15 @@ export default async function Sweep() {
   }
   resultsHost.replaceChildren(emptyPanel());
 
-  async function runSweep(query) {
+  async function runSweep(query, queryId) {
     if (running) return;
     running = true;
     runBtn.disabled = true;
     runBtn.lastChild.textContent = t("sweep.running");
+    afterHost.replaceChildren();
     let data;
     try {
-      data = await getSweep(channel === "maps" ? "maps" : "web", query);
+      data = await getSweep(channel === "maps" ? "maps" : "web", query, queryId);
     } catch {
       resultsHost.replaceChildren(errorCard({ title: t("common.errorTitle"), body: t("common.errorBody") }));
       running = false; runBtn.disabled = false; runBtn.lastChild.textContent = t("sweep.run");
@@ -81,6 +86,14 @@ export default async function Sweep() {
     if (query && !data.query) { data.query = query; }
     const meta = document.getElementById("sweepMeta");
     if (meta) meta.textContent = `${t("sweep.engine", { engine: data.engine || "—" })}${data.cached ? " · " + t("sweep.cached") : ""}`;
+    if (!data.results || data.results.length === 0) {
+      const body = data.source_kind === "unconfigured" ? t("sweep.unconfiguredBody") : t("sweep.noResultsBody");
+      resultsHost.replaceChildren(emptyState({ title: t("sweep.emptyTitle"), body }));
+      running = false;
+      runBtn.disabled = false;
+      runBtn.lastChild.textContent = t("sweep.run");
+      return;
+    }
 
     const rows = el("div", { class: "sweep-results" });
     resultsHost.replaceChildren(rows);
@@ -113,7 +126,7 @@ export default async function Sweep() {
             el("span", { style: "font-weight:600", text: t("sweep.blockedNote") })));
         rows.append(cta);
       }
-      resultsCard.after(notSureCard());
+      afterHost.replaceChildren(notSureCard());
     }, last);
   }
 
@@ -151,7 +164,6 @@ export default async function Sweep() {
   runBtn.addEventListener("click", () => runSweep(queryInput.value.trim()));
   queryInput.addEventListener("keydown", (e) => { if (e.key === "Enter") runSweep(queryInput.value.trim()); });
 
-  // first impression: run the hero query immediately (demo beat 6)
-  setTimeout(() => runSweep(), 500);
+  // The operator chooses when to call an external provider. No automatic sweep.
   return root;
 }

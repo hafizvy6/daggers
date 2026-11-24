@@ -1,4 +1,4 @@
-# Daggers WS2 — official UAE source registry.
+# Daggers — official UAE source registry.
 # Every entry starts as `pending`. Only a human reviewer can approve one:
 #   python -m backend.app.channels.official.cli approve <id> --reviewer NAME
 # Do not hand-edit `status`, `reviewer`, or `verified_at`.
@@ -8,7 +8,7 @@ discovery_index_urls:
 - https://u.ae/en/Help/The-Government
 - https://u.ae/en/resources/useful-links
 discovery_note: Directory pages are a DISCOVERY index only. Parsed candidates are added as pending; the
-  live page structure has not been validated by WS2.
+  live page structure has not been validated by the channel implementation.
 entries:
 - id: uae-gov-portal
   organization: UAE Government Portal (U.ae)
@@ -40,7 +40,7 @@ entries:
   - url: https://u.ae/en
     kind: html
     terms_reviewed: false
-  provenance: 'candidate: named in the WS2 implementation brief; not yet verified by a human reviewer'
+  provenance: 'candidate: named in the original implementation brief; not yet verified by a human reviewer'
   status: pending
   reviewer: null
   verified_at: null
@@ -71,7 +71,7 @@ entries:
   - url: https://uaepass.ae/
     kind: html
     terms_reviewed: false
-  provenance: 'candidate: named in the WS2 implementation brief; not yet verified by a human reviewer;
+  provenance: 'candidate: named in the original implementation brief; not yet verified by a human reviewer;
     also in brands.yaml'
   status: pending
   reviewer: null
@@ -330,7 +330,7 @@ entries:
   - url: https://www.wam.ae/en
     kind: html
     terms_reviewed: false
-  provenance: 'candidate: named in the WS2 implementation brief; not yet verified by a human reviewer'
+  provenance: 'candidate: named in the original implementation brief; not yet verified by a human reviewer'
   status: pending
   reviewer: null
   verified_at: null
@@ -361,7 +361,7 @@ entries:
   - url: https://www.mediaoffice.abudhabi/en/
     kind: html
     terms_reviewed: false
-  provenance: 'candidate: named in the WS2 implementation brief; not yet verified by a human reviewer;
+  provenance: 'candidate: named in the original implementation brief; not yet verified by a human reviewer;
     domain uses the .abudhabi TLD and needs explicit approval'
   status: pending
   reviewer: null
@@ -393,7 +393,7 @@ entries:
   - url: https://www.mediaoffice.ae/en
     kind: html
     terms_reviewed: false
-  provenance: 'candidate: named in the WS2 implementation brief; not yet verified by a human reviewer'
+  provenance: 'candidate: named in the original implementation brief; not yet verified by a human reviewer'
   status: pending
   reviewer: null
   verified_at: null

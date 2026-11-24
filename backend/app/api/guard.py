@@ -1,11 +1,10 @@
-"""WS2 Guard API — adds ONLY two endpoints (WS1 keeps /api/guard/feed and /api/guard/stats).
+"""Guard API — blocklist/sync-status endpoints (the core Guard feed/stats live in findings.py).
 
 GET /api/guard/blocklist.txt?format=hosts|domains
 GET /api/guard/sync-status
 """
 from __future__ import annotations
 
-import os
 import threading
 from typing import Literal
 
@@ -28,11 +27,20 @@ def get_sync(request: Request) -> GuardSync:
             sync = GuardSync(
                 registry=Registry.load(),
                 official_domains=tuple(runtime.catalog.official_domains),
-                source=runtime.guard_rows,  # WS1's existing Guard feed, in-process
-                max_age_days=int(os.environ.get("GUARD_MAX_AGE_DAYS", DEFAULT_MAX_AGE_DAYS)),
+                source=runtime.guard_rows,  # the shared Guard feed, in-process
+                max_age_days=int(getattr(runtime, "settings", None).guard_max_age_days if getattr(runtime, "settings", None) else DEFAULT_MAX_AGE_DAYS),
             )
             state.ws2_guard = sync
     return sync
+
+
+@router.get("/api/guard/config")
+async def guard_config(request: Request):
+    settings = request.app.state.runtime.settings
+    return {
+        "hostname": settings.guard_dns_hostname or None,
+        "configured": bool(settings.nextdns_api_key and settings.nextdns_profile),
+    }
 
 
 @router.get("/api/guard/blocklist.txt")

@@ -69,7 +69,7 @@ _ID = re.compile(r"^[a-z0-9][a-z0-9_.-]{1,63}$")
 DEFAULT_PORTS = {"https": 443, "http": 80}
 
 HEADER = (
-    "# Daggers WS2 — official UAE source registry.\n"
+    "# Daggers — official UAE source registry.\n"
     "# Every entry starts as `pending`. Only a human reviewer can approve one:\n"
     "#   python -m backend.app.channels.official.cli approve <id> --reviewer NAME\n"
     "# Do not hand-edit `status`, `reviewer`, or `verified_at`.\n"
@@ -244,7 +244,7 @@ def validate_entries(raw_entries: list[dict], *, allow_synthetic: bool = False) 
             if domain in PUBLIC_SUFFIXES or "." not in domain:
                 report.errors.append(f"{where}: '{domain}' is a public suffix, not an authority domain")
             if domain.endswith(".example") and not entry.synthetic:
-                report.errors.append(f"{where}: .example domains are reserved for synthetic fixtures")
+                report.errors.append(f"{where}: .example domains are reserved for synthetic unit-test doubles")
             if domain in domain_owner and domain_owner[domain] != entry.id:
                 report.errors.append(f"{where}: domain '{domain}' already claimed by {domain_owner[domain]}")
             domain_owner[domain] = entry.id

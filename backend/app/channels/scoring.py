@@ -1,9 +1,9 @@
-"""Shared-scorer integration for every WS2 surface.
+"""Shared-scorer integration for every live channel surface.
 
-There is exactly one scoring engine: WS1's ``core.scorer``. This module calls it
-in-process, then applies the WS2 trust policy (registry authentication +
-official claim verification). Search, Maps, Sweep and — once WS1 merges the
-integration patch — ``POST /api/scan`` all go through ``ShieldScorer``.
+There is exactly one scoring engine: ``core.scorer``. This module calls it
+in-process, then applies the trust policy (official-registry authentication +
+claim verification). Search, Maps, Sweep and ``POST /api/scan`` all go through
+``ShieldScorer``.
 """
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ RecordProvider = Callable[[list[RegistryEntry]], Iterable[OfficialRecord]]
 
 
 def domain_name_only(signals: list[dict]) -> bool:
-    """True when every WS1 signal is about the URL/domain string itself (not content/infra/feeds)."""
+    """True when every core signal is about the URL/domain string itself (not content/infra/feeds)."""
     return bool(signals) and all(str(s.get("name", "")).startswith(DOMAIN_NAME_SIGNAL_PREFIXES) for s in signals)
 
 
@@ -72,7 +72,7 @@ class ShieldScorer:
         return verify_claim(claim, registry=self.registry, lexicon=self.lexicon, records=records, now=now)
 
     def _content_flags(self, text: str | None) -> tuple[str, ...]:
-        """Examine content even on official hosts (WS1 skips official hosts entirely)."""
+        """Examine content even on official hosts (the core scorer skips official hosts entirely)."""
         if not text:
             return ()
         signal = ws1_claims.evaluate_claims(
@@ -119,9 +119,9 @@ class ShieldScorer:
         }
 
     def apply_to_scan_result(self, result: dict, *, kind: str, input_value: str) -> dict:
-        """Add tag / domain_auth / gov_verification to a WS1 ScanResult (additive only).
+        """Add tag / domain_auth / gov_verification to a core ScanResult (additive only).
 
-        The WS1 fields (verdict, score, reasons, …) are never modified.
+        The core fields (verdict, score, reasons, …) are never modified.
         """
         now = self.clock()
         maliciousness = trust_policy.Maliciousness(
@@ -146,7 +146,7 @@ class ShieldScorer:
         if target:
             auth = self.registry.authenticate(target, now)
             if auth.authenticated:
-                # Re-derive WS1 signal names (pure, cheap) to separate name heuristics from content.
+                # Re-derive core signal names (pure, cheap) to separate name heuristics from content.
                 probe = ws1_scorer.score_url(target, **self.catalog.scoring_kwargs(), text=text,
                                              thresholds=self.thresholds or None)
                 name_only = domain_name_only(probe.signals)

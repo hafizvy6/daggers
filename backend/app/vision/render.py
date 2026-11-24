@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
@@ -90,3 +91,13 @@ async def render_for_finding(finding: dict, settings: Settings) -> RenderResult:
     url = f"https://{domain}/"
     screenshot = settings.evidence_dir / f"shot_{int(finding.get('id') or 0)}.jpg"
     return await render_url(url, screenshot, settings=settings)
+
+
+async def render_for_reference(official_domain: str, settings: Settings) -> RenderResult:
+    """Capture the real official page used as the left side of an evidence pack."""
+    host = str(official_domain).strip().lower().rstrip(".")
+    if not host or "://" in host or "/" in host:
+        return RenderResult(enabled=False, error="invalid official domain")
+    safe = re.sub(r"[^a-z0-9.-]+", "-", host).strip("-") or "official"
+    screenshot = settings.gallery_dir / f"reference_{safe}.jpg"
+    return await render_url(f"https://{host}/", screenshot, settings=settings)

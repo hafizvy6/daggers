@@ -1,5 +1,0 @@
-{
-  "7": {
-    "letter_en": "To: abuse@namecheap.com\nSubject: Abuse report — phishing site on your network (adcb-secure-login.xyz)\n\nDear Abuse Team,\n\nWe are reporting a phishing website hosted on a domain registered through NameCheap, Inc. The site at https://adcb-secure-login.xyz/verify impersonates the online banking login page of Abu Dhabi Commercial Bank (ADCB) and collects card numbers, PINs, and one-time codes, forwarding them to a foreign host (collect.adcb-verify.top).\n\nEvidence on file: 97% visual match with the official adcb.ae/login page, a TLS certificate issued 42 minutes before detection, and a form action pointing to a host outside the domain. This activity was caught by the Daggers radar before any user interaction, and the domain is currently blocked on protected devices.\n\nWe ask that you suspend the domain and preserve registration records for law enforcement. The corresponding report has been filed with Abu Dhabi Police.\n\nRegards,\nDaggers — automated abuse desk\nreference: case #7 · adcb-secure-login.xyz"
-  }
-}

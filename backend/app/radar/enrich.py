@@ -1,23 +1,17 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import socket
 import ssl
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from io import BytesIO
-from pathlib import Path
 from typing import Any
 
 import httpx
 
 from ..catalog import Catalog
 from ..config import Settings
-
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
 def parse_age_hours(value: Any) -> float | None:
@@ -166,29 +160,7 @@ class Enricher:
             pixels = image.convert("RGB").resize((16, 16)).tobytes()
         return {"favicon_hash": f"{murmur3_x86_32(pixels):08x}"}
 
-    def demo_enrich(self, domain: str, cert_issued: str | None = None) -> dict:
-        issued = cert_issued
-        if not issued:
-            path = self.settings.seed_dir / "fixtures" / "crt.json"
-            if path.exists():
-                for row in json.loads(path.read_text(encoding="utf-8")):
-                    if str(row.get("domain")) == domain:
-                        issued = row.get("cert_issued")
-                        break
-        issued = issued or _now()
-        return {
-            "rdap_created": issued,
-            "rdap_registrar": "Daggers offline fixture",
-            "dns_a": ["203.0.113.42"],
-            "tls_issued": issued,
-            "tls_issuer": "Daggers offline fixture",
-            "favicon_hash": f"{murmur3_x86_32(domain.encode('utf-8')):08x}",
-            "cert_age_hours": parse_age_hours(issued) or 0.7,
-        }
-
-    async def enrich(self, domain: str, *, cert_issued: str | None = None, mode: str = "live") -> dict:
-        if mode == "demo":
-            return self.demo_enrich(domain, cert_issued)
+    async def enrich(self, domain: str, *, cert_issued: str | None = None) -> dict:
         if not self.settings.enrich_enabled:
             return {
                 "tls_issued": cert_issued,

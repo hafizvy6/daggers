@@ -96,6 +96,8 @@ html[lang="ar"] .tag { letter-spacing: 0; font-family: var(--font-ar); font-size
   padding: 2px var(--s3); max-width: 100%;
 }
 .chip .chip-k { color: var(--ink-muted); }
+.chip.is-down { border-color: var(--tag-fake); background: var(--tag-fake-bg); color: var(--tag-fake-ink); }
+.chip.is-down .chip-k { color: currentColor; }
 .chip-reason { border-radius: var(--radius); border-color: var(--ink); background: var(--surface); }
 .chips { display: flex; flex-wrap: wrap; gap: var(--s2); }
 

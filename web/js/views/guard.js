@@ -1,14 +1,12 @@
 /* Daggers · Guard — one switch, set once (plan Scenarios 1, 2, 10).
    NextDNS steps EN/AR, blocked counter, feed preview. */
 import { t, fmtNum } from "../i18n/i18n.js";
-import { getGuardStats, getFeed, tagFor, state } from "../api.js";
+import { getGuardConfig, getGuardStats, getFeed, tagFor, state } from "../api.js";
 import { el, tagChip } from "../components/tag.js";
 import { toast } from "../components/toast.js";
 import { pageHead, card } from "./_shared.js";
 import { icons } from "../components/icons.js";
 import { cardsSkeleton } from "../components/skeleton.js";
-
-const HOSTNAME = "daggers-guard.nextdns.io";
 
 export default async function Guard() {
   const root = el("div");
@@ -27,26 +25,34 @@ export default async function Guard() {
   ));
 
   let stats = { blocked_today: 0, feed_size: 0 };
-  try { stats = await getGuardStats(); } catch { /* saved */ }
+  let guard = { hostname: null, configured: false };
+  try {
+    [stats, guard] = await Promise.all([getGuardStats(), getGuardConfig()]);
+  } catch { /* honest zero/unconfigured state */ }
+  const hostname = guard.hostname || "";
 
   statsHost.append(el("div", { class: "card tight" },
     el("div", { class: "stat-row" },
       stat(fmtNum(stats.blocked_today), t("guard.blockedToday"), true),
       stat(fmtNum(stats.feed_size), t("guard.feedSize")),
-      stat(t("guard.on"), t("guard.statusLabel")),
+      stat(t(guard.configured ? "guard.on" : "guard.off"), t("guard.statusLabel")),
     )));
   if (state.offline) statsHost.prepend(el("div", { class: "note", style: "margin-block-end:var(--s3)" }, el("span", { text: "⊘" }), el("span", { text: t("guard.offlineNote") })));
 
   /* the 3 steps */
   const hostRow = el("div", { class: "input-row", style: "margin-block-start:var(--s2)" },
-    el("input", { class: "input mono ltr", dir: "ltr", readonly: true, value: HOSTNAME, "aria-label": t("guard.hostLabel") }),
+    el("input", { class: "input mono ltr", dir: "ltr", readonly: true, value: hostname, placeholder: t("guard.hostUnconfigured"), "aria-label": t("guard.hostLabel") }),
   );
-  const copyBtn = el("button", { class: "btn btn-primary" }, el("span", { html: icons.copy({ size: 16 }) }), document.createTextNode(t("guard.copyHost")));
+  const copyBtn = el("button", { class: "btn btn-primary", disabled: !hostname }, el("span", { html: icons.copy({ size: 16 }) }), document.createTextNode(t("guard.copyHost")));
   copyBtn.addEventListener("click", async () => {
-    try { await navigator.clipboard.writeText(HOSTNAME); toast(t("guard.copied"), { kind: "good" }); }
+    if (!hostname) return;
+    try { await navigator.clipboard.writeText(hostname); toast(t("guard.copied"), { kind: "good" }); }
     catch { hostRow.querySelector("input").select(); }
   });
   hostRow.append(copyBtn);
+  if (!hostname) {
+    stepsHost.replaceChildren(el("div", { class: "note" }, el("span", { text: "⊘" }), el("span", { text: t("guard.hostUnconfigured") })));
+  }
 
   const steps = el("ol", { class: "steps", style: "list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:var(--s3)" });
   [
@@ -63,7 +69,8 @@ export default async function Guard() {
     el("div", {}, el("div", { style: "font-weight:600", text: t("guard.step3Title") }), hostRow,
       el("div", { class: "muted", style: "font-size:var(--fs-xs); margin-block-start:var(--s1)", text: t("guard.step3Body") })),
   ));
-  stepsHost.replaceChildren(card(t("guard.stepsTitle"), t("guard.stepsBadge"), steps));
+  if (hostname) stepsHost.replaceChildren(card(t("guard.stepsTitle"), t("guard.stepsBadge"), steps));
+  else stepsHost.append(card(t("guard.stepsTitle"), t("guard.stepsBadge"), steps));
 
   /* feed preview */
   let findings = [];

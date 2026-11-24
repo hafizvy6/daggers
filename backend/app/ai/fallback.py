@@ -1,6 +1,6 @@
 """Daggers · template fallback — the last link in the provider chain.
 
-Design rule (WS3 §3): AI never writes verdict/score/reasons, and if the model is
+Design rule: AI never writes verdict/score/reasons, and if the model is
 down the structured summary still appears in the same UI shape. To keep that true
 *without* baking prose into Python, the template text lives in prompts/*.txt:
   fallback_case.txt · fallback_takedown.txt

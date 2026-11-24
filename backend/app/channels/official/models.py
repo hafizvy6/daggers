@@ -195,7 +195,7 @@ class DomainAuthentication:
 @dataclass(frozen=True)
 class OfficialRecord:
     """One pre-fetched official document. Produced only by the retrieval layer
-    (or by a clearly labelled SYNTHETIC test fixture)."""
+    (or by a clearly labelled SYNTHETIC unit-test double)."""
 
     record_id: str
     entry_id: str

@@ -1,4 +1,4 @@
-# Daggers WS2 — bilingual claim lexicon (deterministic; no AI matching).
+# Daggers — bilingual claim lexicon (deterministic; no AI matching).
 # Terms are matched as whole tokens after Arabic/English normalization
 # (diacritics, tatweel, Alef/Ya, Arabic-Indic digits). Arabic proclitics
 # (و ب ل ال) are tolerated by the matcher.

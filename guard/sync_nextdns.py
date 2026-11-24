@@ -9,8 +9,10 @@
 * Adds missing domains to the profile denylist; never removes entries it did not add
   unless --prune is given (entries it added are tracked in a local state file).
 * The API key is read from the environment only. Never commit it.
-* NOT validated against the live NextDNS API from the WS2 build environment.
-  NextDNS does not give WS2 block-event counts; this script never reports any.
+* Not validated against the live NextDNS API as shipped. Verify your first
+  `--apply` against a test profile before relying on it.
+* NextDNS block-event counts are never reported by this script; read them from
+  the provider dashboard only.
 """
 from __future__ import annotations
 

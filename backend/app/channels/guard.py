@@ -1,14 +1,14 @@
-"""Guard: DNS blocklist generation from WS1's existing Guard feed.
+"""Guard: DNS blocklist generation from the shared Guard feed.
 
-Input is exactly WS1's ``GuardRow`` stream (``runtime.guard_rows()`` — the same
-data served at ``/api/guard/feed``). WS2 does not create another feed.
+Input is exactly the ``GuardRow`` stream (``runtime.guard_rows()`` — the same
+data served at ``/api/guard/feed``). This module does not create another feed.
 
 Only *sufficiently confirmed* malicious domains are blocked:
-  * verdict must be ``MALICIOUS`` (WS1 confirmed FAKE). ``MISLEADING`` rows are
-    never blocked here even if WS1's GUARD_BLOCK_MISLEADING flag is on.
+  * verdict must be ``MALICIOUS`` (confirmed FAKE). ``MISLEADING`` rows are
+    never blocked here even if GUARD_BLOCK_MISLEADING is on.
   * domain must be a valid, non-IP DNS name (punycode wire form)
   * rows older than GUARD_MAX_AGE_DAYS are expired
-  * anything in the official registry (any status) or WS1's brand allowlist is
+  * anything in the official registry (any status) or the brand allowlist is
     never blocked — a compromised official site is a manual-review case.
 Unknown, WARNING, and unverified domains never enter the list.
 """
@@ -81,7 +81,7 @@ def build_blocklist(
 
 def render(result: BlocklistResult, fmt: str = "hosts") -> str:
     header = [
-        "# Daggers Guard blocklist (WS2) — confirmed-malicious domains only",
+        "# Daggers Guard blocklist — confirmed-malicious domains only",
         f"# generated_at: {result.generated_at}",
         f"# entries: {len(result.domains)}",
         "# NextDNS: paste the 'domains' format into a denylist, or sync with guard/sync_nextdns.py",
@@ -109,7 +109,7 @@ class GuardSync:
     consecutive_failures: int = 0
 
     def sync(self, force: bool = False) -> BlocklistResult | None:
-        """Refresh from WS1's Guard feed. On failure the previous good list is kept."""
+        """Refresh from the shared Guard feed. On failure the previous good list is kept."""
         with self._lock:
             now = self.clock()
             last_ok = parse_ts(self.last_success_at)
@@ -135,7 +135,7 @@ class GuardSync:
             state = "stale"
         return {
             "status": state,
-            "source": "ws1_guard_feed",
+            "source": "guard_feed",
             "mode": mode,
             "last_attempt_at": self.last_attempt_at,
             "last_success_at": self.last_success_at,
@@ -149,6 +149,6 @@ class GuardSync:
             "nextdns": {
                 "push": "manual script guard/sync_nextdns.py (not run by the server)",
                 "block_events_measured": False,
-                "note": "Block hit counts are not measured by WS2; NextDNS free-tier analytics are not read.",
+                "note": "Block hit counts are not measured by Daggers; NextDNS free-tier analytics are not read.",
             },
         }

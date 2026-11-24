@@ -1,6 +1,6 @@
-/* Daggers · service worker — cache-first shell + fonts + icons;
-   network-first for /api/* with last-good fallback (demo resilience). */
-const VERSION = "daggers-v3.0.1";
+/* Daggers · service worker — cache-first shell; network-first for live API GETs.
+   Only real successful API responses are cached. No fixture or evidence bundle. */
+const VERSION = "daggers-live-v4.0.0";
 const SHELL = [
   "./", "./index.html", "./config.js", "./manifest.json",
   "./css/tokens.css", "./css/base.css", "./css/layout.css", "./css/components.css",
@@ -17,70 +17,63 @@ const SHELL = [
   "./fonts/plex-arabic-400.woff2", "./fonts/plex-arabic-500.woff2",
   "./fonts/plex-arabic-600.woff2", "./fonts/plex-arabic-700.woff2",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/maskable-512.png",
-  "./fixtures/feed.json", "./fixtures/reports.json", "./fixtures/status.json",
-  "./fixtures/guard_stats.json", "./fixtures/scan.json",
-  "./fixtures/sweep_web.json", "./fixtures/sweep_maps.json", "./fixtures/numbers.json",
-  "./fixtures/ai_cases.json", "./fixtures/takedowns.json", "./fixtures/stream_demo.json",
 ];
 
-self.addEventListener("install", (e) => {
-  e.waitUntil((async () => {
+self.addEventListener("install", (event) => {
+  event.waitUntil((async () => {
     const cache = await caches.open(VERSION);
-    await Promise.allSettled(SHELL.map((u) => cache.add(u)));
-    // evidence images + per-finding fixtures (best effort)
-    for (let id = 31; id <= 43; id++) {
-      await Promise.allSettled([
-        cache.add(`./evidence/${id}.jpg`),
-        cache.add(`./fixtures/finding_${id}.json`),
-      ]);
-    }
+    await Promise.allSettled(SHELL.map((path) => cache.add(path)));
     self.skipWaiting();
   })());
 });
 
-self.addEventListener("activate", (e) => {
-  e.waitUntil((async () => {
+self.addEventListener("activate", (event) => {
+  event.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k)));
+    await Promise.all(keys.filter((key) => key !== VERSION).map((key) => caches.delete(key)));
     self.clients.claim();
   })());
 });
 
-self.addEventListener("fetch", (e) => {
-  const req = e.request;
-  if (req.method !== "GET") return;
-  const url = new URL(req.url);
+self.addEventListener("fetch", (event) => {
+  const request = event.request;
+  if (request.method !== "GET") return;
+  const url = new URL(request.url);
 
-  // never buffer a live SSE stream
+  // Never buffer a live SSE stream.
   if (url.pathname === "/api/stream") return;
 
-  // API: network-first, last-good cache fallback
+  // API GET: network-first, with a last-good REAL response only.
   if (url.pathname.startsWith("/api/")) {
-    e.respondWith((async () => {
+    event.respondWith((async () => {
       try {
-        const res = await fetch(req);
-        const cache = await caches.open(VERSION);
-        if (res.ok) cache.put(req, res.clone());
-        return res;
+        const response = await fetch(request);
+        if (response.ok) {
+          const cache = await caches.open(VERSION);
+          cache.put(request, response.clone());
+        }
+        return response;
       } catch {
-        const hit = await caches.match(req);
-        return hit || Response.error();
+        const cached = await caches.match(request);
+        return cached || Response.error();
       }
     })());
     return;
   }
 
-  // shell/assets: cache-first
-  e.respondWith((async () => {
-    const hit = await caches.match(req, { ignoreSearch: url.pathname === "/" || url.pathname.endsWith("index.html") });
-    if (hit) return hit;
+  // Static shell/assets: cache-first, with an app-shell fallback for navigation.
+  event.respondWith((async () => {
+    const cached = await caches.match(request, {
+      ignoreSearch: url.pathname === "/" || url.pathname.endsWith("index.html"),
+    });
+    if (cached) return cached;
     try {
-      const res = await fetch(req);
-      if (res.ok && url.origin === self.location.origin) {
+      const response = await fetch(request);
+      if (response.ok && url.origin === self.location.origin) {
         const cache = await caches.open(VERSION);
-        cache.put(req, res.clone());
+        cache.put(request, response.clone());
       }
-      return res;
+      return response;
     } catch {
       return (await caches.match("./index.html")) || Response.error();
     }

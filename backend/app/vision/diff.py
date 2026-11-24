@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 import re
-import shutil
 from pathlib import Path
-from typing import Iterable
 from urllib.parse import urlparse
 
 try:
     from PIL import Image, ImageDraw  # type: ignore[import-not-found]
-except ImportError:  # pragma: no cover - bundled fallback JPG remains usable
+except ImportError:  # pragma: no cover - evidence composition degrades to None
     Image = None  # type: ignore[assignment]
     ImageDraw = None  # type: ignore[assignment]
 
@@ -22,25 +20,15 @@ from .gallery import (
     SURFACE,
 )
 
-# Explicit palette assignment keeps this module readable when imported alone.
 FAKE = (214, 69, 69)
 WARN = (216, 146, 31)
 MISLEAD = (217, 111, 50)
 SAFE = (47, 158, 104)
-FAKE_BG = (251, 229, 229)
 
 EMAIL_RE = re.compile(r"\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b", re.I)
 PHONE_RE = re.compile(r"(?:\+\d{9,}|\b\d{10,}\b)")
 PAYMENT_FIELD_RE = re.compile(r"(?:iban|cvv|card[_-]?number|otp|pin)", re.I)
 OBFUSCATED_RE = re.compile(r"(?:eval\s*\(|atob\s*\(|unescape\s*\(|String\.fromCharCode)", re.I)
-
-
-def _fallback_path() -> Path:
-    return Path(__file__).resolve().parents[2] / "seed" / "casefiles" / "fallback.jpg"
-
-
-def _gallery_index_path() -> Path:
-    return Path(__file__).resolve().parents[2] / "seed" / "gallery_index.json"
 
 
 def _redact(value: object) -> str:
@@ -85,33 +73,6 @@ def _wrap(draw, text: str, font, width: int, max_lines: int = 4) -> list[str]:
     return lines
 
 
-def _create_suspect_reference(finding: dict, size: tuple[int, int] = (700, 400)):
-    if Image is None or ImageDraw is None:
-        return None
-    width, height = size
-    image = Image.new("RGB", size, PAPER)
-    draw = ImageDraw.Draw(image)
-    title_font = _font(24, bold=True)
-    body_font = _font(16)
-    small_font = _font(13, bold=True)
-    draw.rectangle((8, 8, width - 8, height - 8), fill=SURFACE, outline=FAKE, width=4)
-    draw.rectangle((8, 8, width - 8, 58), fill=FAKE_BG, outline=FAKE, width=3)
-    draw.text((26, 22), "SUSPICIOUS PAGE", fill=FAKE, font=small_font)
-    domain = _redact(finding.get("domain", "unknown domain"))
-    draw.text((26, 76), domain[:42], fill=INK, font=title_font)
-    draw.text((26, 112), "Look-alike layout captured for comparison", fill=MUTED, font=body_font)
-    draw.rounded_rectangle((26, 148, width - 26, height - 28), radius=6, fill=PAPER, outline=INK, width=2)
-    draw.text((48, 168), "Verify your account", fill=INK, font=body_font)
-    for index, label in enumerate(("Card number", "CVV / OTP", "Password")):
-        y = 206 + index * 46
-        draw.rectangle((48, y, width - 48, y + 30), fill=SURFACE, outline=MUTED, width=1)
-        draw.text((60, y + 7), label, fill=MUTED, font=small_font)
-        draw.ellipse((width - 78, y + 5, width - 58, y + 25), outline=FAKE, width=3)
-    draw.rectangle((48, 350, 210, 384), fill=FAKE, outline=INK, width=2)
-    draw.text((88, 359), "SUBMIT", fill=SURFACE, font=small_font)
-    return image
-
-
 def _verdict_color(verdict: str) -> tuple[int, int, int]:
     return {
         "MALICIOUS": FAKE,
@@ -129,8 +90,9 @@ def _compose_evidence(
     *,
     clone_override: float | None = None,
 ) -> Path | None:
+    """Compose a side-by-side evidence JPG from two REAL captured images only."""
     if Image is None or ImageDraw is None or official_image is None or suspect_image is None:
-        return _copy_fallback(destination)
+        return None
     destination.parent.mkdir(parents=True, exist_ok=True)
     width, height = 1600, 900
     canvas = Image.new("RGB", (width, height), PAPER)
@@ -145,7 +107,7 @@ def _compose_evidence(
     draw.text((1270, 60), "ONE BRAIN · ALL SURFACES", fill=ACCENT, font=_font(15, bold=True))
 
     draw.text((52, 132), "OFFICIAL REFERENCE", fill=ACCENT, font=_font(20, bold=True))
-    draw.text((852, 132), "SUSPICIOUS PAGE", fill=FAKE, font=_font(20, bold=True))
+    draw.text((852, 132), "CAPTURED PAGE", fill=FAKE, font=_font(20, bold=True))
     left_box = (48, 166, 768, 606)
     right_box = (832, 166, 1552, 606)
     draw.rectangle(left_box, fill=SURFACE, outline=INK, width=3)
@@ -179,60 +141,6 @@ def _compose_evidence(
     return destination
 
 
-def _copy_fallback(destination: Path) -> Path | None:
-    fallback = _fallback_path()
-    if not fallback.exists():
-        return None
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(fallback, destination)
-    return destination
-
-
-def ensure_evidence_image(finding: dict, destination: Path, gallery_dir: Path | None = None) -> Path | None:
-    """Materialize a readable side-by-side evidence JPG from C1 data only."""
-    destination = Path(destination)
-    if destination.exists() and destination.stat().st_size > 0:
-        return destination
-    if Image is None or ImageDraw is None:
-        return _copy_fallback(destination)
-
-    try:
-        from .gallery import create_official_reference, load_gallery
-
-        gallery = load_gallery(_gallery_index_path())
-        gallery_match = str(finding.get("gallery_match") or "")
-        entry = next(
-            (
-                item
-                for item in gallery
-                if item.get("url") == gallery_match
-                or str(item.get("official_domain", "")) in gallery_match
-            ),
-            None,
-        )
-        official_image = None
-        if entry and gallery_dir:
-            candidate = Path(gallery_dir) / Path(str(entry.get("path", ""))).name
-            if candidate.exists():
-                try:
-                    official_image = Image.open(candidate).convert("RGB")
-                except OSError:
-                    official_image = None
-        if official_image is None:
-            brand = entry or {
-                "token": str(finding.get("domain", "brand")).split(".")[0],
-                "official_domain": gallery_match.split("/")[0] or "official.example",
-            }
-            official_image = create_official_reference(brand, "desktop", (700, 400))
-        suspect_image = _create_suspect_reference(finding, (700, 400))
-        composed = _compose_evidence(finding, official_image, suspect_image, destination)
-        if composed is not None:
-            return composed
-    except Exception:
-        pass
-    return _copy_fallback(destination)
-
-
 def create_comparison_evidence(
     screenshot_path: Path,
     reference_path: Path,
@@ -240,14 +148,15 @@ def create_comparison_evidence(
     destination: Path,
     clone_score: float,
 ) -> Path | None:
-    """Use real rendered screenshots when Playwright/vision extras are enabled."""
-    if Image is None or not Path(screenshot_path).exists() or not Path(reference_path).exists():
-        return ensure_evidence_image(finding, destination)
+    """Use real rendered screenshots only. Missing captures are an honest 404."""
+    screenshot_path, reference_path = Path(screenshot_path), Path(reference_path)
+    if Image is None or not screenshot_path.exists() or not reference_path.exists():
+        return None
     try:
         official_image = Image.open(reference_path).convert("RGB")
         suspect_image = Image.open(screenshot_path).convert("RGB")
     except OSError:
-        return ensure_evidence_image(finding, destination)
+        return None
     return _compose_evidence(finding, official_image, suspect_image, destination, clone_override=clone_score)
 
 

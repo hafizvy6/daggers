@@ -1,4 +1,4 @@
-"""Search, Maps, Sweep, Guard, privacy and URL handling. Offline; SYNTHETIC fixtures only."""
+"""Search, Maps, Sweep, Guard, privacy and URL handling. Synthetic doubles live only under tests."""
 from __future__ import annotations
 
 import json
@@ -9,9 +9,9 @@ from backend.tests.ws2 import helpers
 from backend.app.channels import privacy, urls
 from backend.app.channels.guard import GuardSync, build_blocklist, render
 from backend.app.channels.http_client import ProviderError
-from backend.app.channels.maps import FixtureMapsProvider, Listing, MapsChannel
+from backend.app.channels.maps import Listing, MapsChannel
 from backend.app.channels.search import (
-    DuckDuckGoProvider, FixtureProvider, SearchChannel, SerperProvider, TTLCache, default_providers, parse_ddg_html,
+    DuckDuckGoProvider, SearchChannel, SerperProvider, TTLCache, default_providers, parse_ddg_html,
 )
 from backend.app.channels.sweep import RateLimiter, SweepError, SweepService, load_queries
 from backend.app.channels.sweep_store import InMemorySweepStore, RepoSweepStore, make_store
@@ -19,7 +19,7 @@ from backend.app.channels.official.registry import Registry
 
 
 def prod_scorer():
-    """Production registry (all pending) — what the demo actually runs with today."""
+    """Production registry (all pending) — no synthetic record is auto-approved."""
     return helpers.scorer(records=[], registry=Registry.load())
 
 
@@ -70,10 +70,10 @@ class CountingLive:
 
 
 class TestSearch(unittest.TestCase):
-    def test_fixture_run_is_labelled_deduped_and_scored(self):
-        run = SearchChannel(prod_scorer(), providers=[FixtureProvider()]).run("pay abu dhabi police traffic fines online")
+    def test_test_double_run_is_deduped_and_scored(self):
+        run = SearchChannel(prod_scorer(), providers=[helpers.TestSearchProvider()]).run("pay abu dhabi police traffic fines online")
         self.assertEqual(run.source_kind, "fixture")
-        self.assertEqual(run.engine, "fixture")
+        self.assertEqual(run.engine, "unit_test")
         self.assertEqual(run.rejected, 1)  # javascript: URL
         found = [r["url"] for r in run.results]
         self.assertEqual(len(found), len(set(urls.dedupe_key(u) for u in found)))
@@ -84,14 +84,15 @@ class TestSearch(unittest.TestCase):
         self.assertTrue(any(r["tag"] == "FAKE" for r in run.results))
         self.assertTrue(all("4567" not in r["snippet"] for r in run.results))  # PII redacted
 
-    def test_live_failure_falls_back_to_fixture_and_reports_error(self):
-        run = SearchChannel(prod_scorer(), providers=[FailingProvider(), FixtureProvider()]).run("anything")
-        self.assertEqual(run.source_kind, "fixture")
+    def test_live_failure_never_falls_back_to_test_data(self):
+        run = SearchChannel(prod_scorer(), providers=[FailingProvider()]).run("anything")
+        self.assertEqual(run.source_kind, "unavailable")
+        self.assertEqual(run.results, [])
         self.assertEqual(run.errors, ["serper: ProviderError"])
 
     def test_live_results_are_cached_and_marked(self):
         live = CountingLive()
-        channel = SearchChannel(prod_scorer(), providers=[live, FixtureProvider()], cache=TTLCache())
+        channel = SearchChannel(prod_scorer(), providers=[live], cache=TTLCache())
         self.assertEqual(channel.run("q").source_kind, "live")
         second = channel.run("q")
         self.assertEqual((second.source_kind, second.cached, live.calls), ("cached", True, 1))
@@ -112,15 +113,18 @@ class TestSearch(unittest.TestCase):
         provider = DuckDuckGoProvider(http=lambda *a, **k: html.encode())
         self.assertEqual(len(provider.search("q", "en", 5)), 1)
 
-    def test_live_providers_are_opt_in(self):
-        self.assertEqual([p.name for p in default_providers({})], ["fixture"])
+    def test_live_providers_are_opt_in_and_no_fixture_is_available(self):
+        self.assertEqual(default_providers({}), [])
         names = [p.name for p in default_providers({"SEARCH_LIVE_ENABLED": "1", "SERPER_API_KEY": "x"})]
-        self.assertEqual(names, ["serper", "duckduckgo", "fixture"])
+        self.assertEqual(names, ["serper", "duckduckgo"])
+        unconfigured = SearchChannel(prod_scorer(), providers=default_providers({})).run("q")
+        self.assertEqual(unconfigured.source_kind, "unconfigured")
+        self.assertEqual(unconfigured.results, [])
 
 
 class TestMaps(unittest.TestCase):
     def setUp(self):
-        self.channel = MapsChannel(prod_scorer(), providers=[FixtureMapsProvider()])
+        self.channel = MapsChannel(prod_scorer(), providers=[helpers.TestMapsProvider()])
 
     def test_separate_evidence_per_check(self):
         result = self.channel.run("police service centre abu dhabi")
@@ -139,8 +143,8 @@ class TestMaps(unittest.TestCase):
 
     def test_authenticated_website_with_consistent_identity_can_be_safe(self):
         channel = MapsChannel(helpers.scorer(), providers=[])
-        item = channel.assess_listing(Listing("fixture", "p", "Synthetic Police Centre", website="https://police.gov.example/",
-                                              phone="+971 2 555 1234", synthetic=True))
+        item = channel.assess_listing(Listing("unit_test_maps", "p", "Synthetic Police Centre", website="https://police.gov.example/",
+                                              phone="+971 2 555 1234", synthetic=True, source_kind="fixture"))
         self.assertEqual(item["checks"]["identity"]["status"], "consistent")
         self.assertEqual(item["tag"], "SAFE")
 
@@ -150,8 +154,8 @@ class TestSweep(unittest.TestCase):
         scorer = prod_scorer()
         events = []
         service = SweepService(
-            search_channel=SearchChannel(scorer, providers=[FixtureProvider()]),
-            maps_channel=MapsChannel(scorer, providers=[FixtureMapsProvider()]),
+            search_channel=SearchChannel(scorer, providers=[helpers.TestSearchProvider()]),
+            maps_channel=MapsChannel(scorer, providers=[helpers.TestMapsProvider()]),
             store=InMemorySweepStore(), publish=lambda e, d: events.append((e, d)), **kw)
         return service, events
 
@@ -163,13 +167,28 @@ class TestSweep(unittest.TestCase):
         service, events = self.make(allow_arbitrary=False)
         run = service.run(channel="web", query_id="web-adpolice-fines", client="1.1.1.1")
         self.assertEqual(run["store"], "memory-temporary")
-        self.assertTrue(run["synthetic"])
+        self.assertFalse(run["synthetic"])
         self.assertEqual(sum(run["counts"].values()), len(run["results"]))
         self.assertEqual(service.get(run["id"])["results"], run["results"])
         self.assertEqual(events[0][0], "sweep")
         maps = service.run(channel="maps", client="1.1.1.1")
         self.assertTrue(all(r["maps"] for r in maps["results"]))
         self.assertIsNone(service.get(99999))
+
+    def test_product_channels_are_empty_when_unconfigured(self):
+        scorer = prod_scorer()
+        service = SweepService(
+            search_channel=SearchChannel(scorer, providers=[]),
+            maps_channel=MapsChannel(scorer, providers=[]),
+            store=InMemorySweepStore(),
+        )
+        web = service.run(channel="web", query_id="web-adpolice-fines")
+        self.assertEqual(web["source_kind"], "unconfigured")
+        self.assertEqual(web["results"], [])
+        self.assertIn("no live provider configured", " ".join(web["errors"]))
+        maps = service.run(channel="maps")
+        self.assertEqual(maps["source_kind"], "unconfigured")
+        self.assertEqual(maps["results"], [])
 
     def test_arbitrary_queries_need_opt_in_and_no_pii(self):
         service, _ = self.make(allow_arbitrary=False)
