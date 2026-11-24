@@ -150,8 +150,11 @@ async function postJson(path, body, { timeout = 9000, signal } = {}) {
 
 /* ---------------- contract C1/C2/C3/C4 methods -------------------- */
 
-export async function getFeed() {
-  const data = await getJson("/api/feed", { cacheName: "feed", fallback: [] });
+export async function getFeed({ analyst = false } = {}) {
+  const path = analyst
+    ? "/api/feed?limit=200&min_score=0&include_unknown=true&include_suppressed=true"
+    : "/api/feed?limit=100&min_score=0.35";
+  const data = await getJson(path, { cacheName: analyst ? "feed.analyst" : "feed", fallback: [] });
   const findings = Array.isArray(data) ? data : (data.findings || []);
   return findings.map(withEvidenceUrl);
 }
@@ -170,6 +173,14 @@ export async function getFinding(id) {
     const saved = cacheGet(`finding:${id}`);
     return saved ? withEvidenceUrl(saved) : null;
   }
+}
+
+export async function getFindingLabel(id) {
+  return getJson(`/api/finding/${id}/label`, { fallback: { label: null } });
+}
+
+export async function setFindingLabel(id, label) {
+  return postJson(`/api/finding/${id}/label`, { label });
 }
 
 export async function getReports() {

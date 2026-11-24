@@ -106,7 +106,14 @@ class Settings:
     suspicious_threshold: float = 0.35
     render_score_min: float = 0.45
     autofile_clone_min: float = 90.0
+    radar_min_display_score: float = 0.35
     guard_block_misleading: bool = False
+
+    auto_report_enabled: bool = True
+    police_intake_enabled: bool = False
+    police_intake_url: str = ""
+    police_intake_token: str = ""
+    police_intake_timeout_s: float = 10.0
 
     render_enabled: bool = False
     crt_enabled: bool = False
@@ -165,7 +172,13 @@ class Settings:
             suspicious_threshold=_float("SUSPICIOUS_THRESHOLD", 0.35, env),
             render_score_min=_float("RENDER_SCORE_MIN", 0.45, env),
             autofile_clone_min=_float("AUTOFILE_CLONE_MIN", 90.0, env),
+            radar_min_display_score=_float("RADAR_MIN_DISPLAY_SCORE", 0.35, env),
             guard_block_misleading=_bool("GUARD_BLOCK_MISLEADING", False, env),
+            auto_report_enabled=_bool("AUTO_REPORT_ENABLED", True, env),
+            police_intake_enabled=_bool("POLICE_INTAKE_ENABLED", False, env),
+            police_intake_url=env.get("POLICE_INTAKE_URL", "").strip(),
+            police_intake_token=env.get("POLICE_INTAKE_TOKEN", ""),
+            police_intake_timeout_s=max(1.0, _float("POLICE_INTAKE_TIMEOUT_S", 10.0, env)),
             render_enabled=_bool("RENDER_ENABLED", False, env),
             crt_enabled=_bool("CRT_ENABLED", False, env),
             feeds_enabled=_bool("FEEDS_ENABLED", False, env),
@@ -234,6 +247,11 @@ class Settings:
                 "configured": bool(self.gemini_key or self.groq_key),
                 "state": self.ai_state,
                 "template_fallback": True,
+            },
+            "police_intake": {
+                "enabled": self.police_intake_enabled,
+                "configured": bool(self.police_intake_url),
+                "auto_report_enabled": self.auto_report_enabled,
             },
             "guard": {
                 "enabled": True,

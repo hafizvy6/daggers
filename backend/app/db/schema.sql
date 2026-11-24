@@ -78,6 +78,12 @@ CREATE TABLE IF NOT EXISTS feed_labels (
     updated_at      TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS analyst_labels (
+    domain          TEXT PRIMARY KEY,
+    label           TEXT NOT NULL CHECK(label IN ('official', 'scam', 'unrelated', 'parked')),
+    updated_at      TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS meta (
     key             TEXT PRIMARY KEY,
     value           TEXT NOT NULL

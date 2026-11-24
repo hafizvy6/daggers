@@ -20,6 +20,7 @@ from .config import Heartbeats, Settings
 from .core import scorer
 from .db.repo import Repository
 from .radar.pipeline import RadarPipeline
+from .reports.intake import PoliceIntakeClient
 from .reports.queue import ReportQueue
 
 logger = logging.getLogger("daggers.app")
@@ -78,7 +79,12 @@ class Runtime:
         self.events = EventBus()
         self.mode = "live"
         self.optional_routers: dict[str, str] = {}
-        self.report_queue = ReportQueue(self.repo, clone_min=self.settings.autofile_clone_min)
+        self.report_queue = ReportQueue(
+            self.repo,
+            clone_min=self.settings.autofile_clone_min,
+            auto_report_enabled=self.settings.auto_report_enabled,
+            intake=PoliceIntakeClient(self.settings),
+        )
         self.pipeline = RadarPipeline(
             repo=self.repo,
             settings=self.settings,
@@ -132,11 +138,41 @@ class Runtime:
     def publish(self, event: str, data: dict) -> None:
         self.events.publish(event, data)
 
-    def get_findings(self, limit: int) -> list[dict]:
-        return self.repo.get_findings(limit)
+    def get_findings(
+        self,
+        limit: int,
+        *,
+        min_score: float | None = None,
+        include_unknown: bool = False,
+        include_suppressed: bool = False,
+    ) -> list[dict]:
+        return self.repo.get_findings(
+            limit,
+            min_score=min_score,
+            include_unknown=include_unknown,
+            include_suppressed=include_suppressed,
+        )
 
     def get_finding(self, finding_id: int) -> dict | None:
-        return self.repo.get_finding(finding_id)
+        finding = self.repo.get_finding(finding_id)
+        if finding:
+            finding["analyst_label"] = self.repo.get_analyst_label(str(finding["domain"]))
+        return finding
+
+    def set_finding_label(self, finding_id: int, label: str) -> dict | None:
+        finding = self.repo.get_finding(finding_id)
+        if finding is None:
+            return None
+        return self.repo.set_analyst_label(str(finding["domain"]), label)
+
+    def get_finding_label(self, finding_id: int) -> dict | None:
+        finding = self.repo.get_finding(finding_id)
+        if finding is None:
+            return None
+        return self.repo.get_analyst_label(str(finding["domain"]))
+
+    def analyst_label_stats(self) -> dict[str, int]:
+        return self.repo.analyst_label_stats()
 
     def guard_rows(self) -> list[dict]:
         return self.repo.get_guard_rows(self.settings.guard_block_misleading)

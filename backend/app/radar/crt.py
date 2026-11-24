@@ -8,6 +8,7 @@ import httpx
 from ..catalog import Catalog
 from ..config import Settings
 from ..core import scorer
+from .candidates import admit_candidate
 from .cursors import Cursors
 
 
@@ -42,11 +43,11 @@ class CrtPoller:
         last = float(self.cursors.get("crt_last_query_ts", 0) or 0)
         if now - last < self.settings.crt_min_query_gap_s:
             return []
-        tokens = [str(brand["token"]) for brand in self.catalog.brands[:36]]
-        if not tokens:
+        terms = list(self.catalog.radar_terms)
+        if not terms:
             return []
         index = self.cursors.get_int("crt_query_index", 0)
-        token = tokens[index % len(tokens)]
+        token = terms[index % len(terms)]
         self.cursors.set("crt_query_index", index + 1)
         self.cursors.set("crt_last_query_ts", now)
 
@@ -64,6 +65,7 @@ class CrtPoller:
 
         rows: list[dict] = []
         seen: set[str] = set()
+        official_domains = self.catalog.official_domains
         issued = _now()
         for entry in payload[:200]:
             names = str(entry.get("name_value") or entry.get("common_name") or "").splitlines()
@@ -72,6 +74,9 @@ class CrtPoller:
             for name in cert_names:
                 domain = self._registrable(name)
                 if not domain or domain in seen:
+                    continue
+                admission = admit_candidate(domain, terms, official_domains)
+                if not admission["admitted"]:
                     continue
                 seen.add(domain)
                 rows.append(
@@ -83,6 +88,8 @@ class CrtPoller:
                         "first_seen": issued,
                         "is_case_file": False,
                         "brand_hit": True,
+                        "candidate_terms": admission["matched_terms"],
+                        "candidate_reason": admission["reason"],
                     }
                 )
                 if len(rows) >= 25:

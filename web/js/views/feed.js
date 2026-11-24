@@ -14,7 +14,10 @@ export default async function Feed(ctx) {
     kicker: t("feed.kicker"),
     title: t("feed.title"),
     subtitle: t("feed.subtitle"),
-    actions: [el("span", { class: "chip", title: t("feed.liveNote") },
+    actions: [(() => {
+      const button = el("button", { class: "btn btn-ghost btn-sm", id: "feedAnalystToggle", title: t("feed.analystQueueNote"), text: t("feed.analystQueue") });
+      return button;
+    })(), el("span", { class: "chip", title: t("feed.liveNote") },
       el("span", { class: "chip-k", text: "●" }),
       el("span", { class: "mono", text: state.apiDown || state.offline ? t("top.down") : t("top.live") }))],
   }));
@@ -29,7 +32,7 @@ export default async function Feed(ctx) {
 
   let findings = [];
   let filter = "all";
-  let live = true;
+  let analyst = false;
 
   wrap.append(el("div", { class: "row", style: "gap:var(--s3)" }, filterHost,
     el("span", { class: "card-kicker mono", id: "feedCount", style: "margin-inline-start:auto" })));
@@ -85,8 +88,26 @@ export default async function Feed(ctx) {
     listCard.replaceChildren(list);
   }
 
+  const requestFeed = () => getFeed({ analyst });
+  const analystToggle = root.querySelector("#feedAnalystToggle");
+  analystToggle?.addEventListener("click", async () => {
+    analyst = !analyst;
+    analystToggle.textContent = analyst ? t("feed.actionableView") : t("feed.analystQueue");
+    analystToggle.setAttribute("aria-pressed", String(analyst));
+    listCard.replaceChildren(feedSkeleton(6));
+    try {
+      findings = await requestFeed();
+      paintList();
+    } catch {
+      listCard.replaceChildren(errorCard({
+        title: t("common.errorTitle"), body: t("common.errorBody"),
+        retryLabel: t("common.retry"), retry: () => ctx.app && import("../app.js").then((m) => m.navigate(true)),
+      }));
+    }
+  });
+
   try {
-    findings = await getFeed();
+    findings = await requestFeed();
     // mark everything already seen as not-new
     const seen = new Set(JSON.parse(sessionStorage.getItem(SEEN_KEY) || "[]"));
     paintList();
