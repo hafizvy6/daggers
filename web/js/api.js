@@ -190,10 +190,6 @@ export async function getReports() {
   return reports;
 }
 
-export async function fileReport(findingId) {
-  return postJson("/api/reports", { finding_id: findingId });
-}
-
 export async function advanceReport(id, to) {
   return postJson(`/api/reports/${id}/advance`, { status: to });
 }

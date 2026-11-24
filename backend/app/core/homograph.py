@@ -233,13 +233,27 @@ def audit(
         official_label = official_unicode.split(".")[0]
         folded_official = confusable_fold(official_unicode)
         folded_registrable = confusable_fold(registrable)
+        # An exact ASCII official label on another registry (dewa.co.jp) is
+        # brand misuse, not a homograph. Only a visibly transformed label —
+        # diacritics, non-Latin alphabet confusables — counts as spoofing.
         label_match = len(official_label) >= 3 and any(
-            confusable_fold(label) == confusable_fold(official_label) for label in labels
+            confusable_fold(label) == confusable_fold(official_label)
+            and label != official_label
+            for label in labels
         )
         if folded_registrable == folded_official or confusable_fold(unicode_host) == folded_official or label_match:
-            spoofed_domain = official
-            reasons.append(f"confusable spoof of {official} (look-alike letters from another alphabet)")
-            break
+            # If the raw Unicode registrable/host is byte-for-byte different
+            # but folds to the official name, this is a confusable spoof.
+            if (
+                folded_registrable == folded_official
+                and registrable != official_unicode
+            ) or (
+                confusable_fold(unicode_host) == folded_official
+                and unicode_host != official_unicode
+            ) or label_match:
+                spoofed_domain = official
+                reasons.append(f"confusable spoof of {official} (look-alike letters from another alphabet)")
+                break
 
     return HomographResult(
         unicode_host=unicode_host,
