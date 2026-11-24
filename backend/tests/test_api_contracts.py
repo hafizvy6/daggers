@@ -363,10 +363,12 @@ def test_evidence_composition_requires_two_real_captures(tmp_path):
 def test_reports_are_empty_until_a_real_finding_is_inserted(api_env, insert_test_finding):
     client, _, _ = api_env
     assert client.get("/api/reports").json() == {"reports": []}
+    assert client.post("/api/reports", json={"finding_id": 1}).status_code == 410
+    # Test helper writes directly to the repository; production reaches the same
+    # path automatically from the radar pipeline or startup backfill.
     finding = insert_test_finding()
-    created = client.post("/api/reports", json={"finding_id": finding["id"]})
-    assert created.status_code == 201
-    report = created.json()
+    report = client.app.state.runtime.report_queue.maybe_auto_file(finding)
+    assert report is not None
     validate_zero_pii(report)
     assert report["finding_id"] == finding["id"]
 
@@ -415,9 +417,9 @@ def test_ws2_sweep_is_empty_when_live_providers_are_unconfigured(api_env):
 def test_ws3_reports_and_ai_routes_use_live_repository(api_env, insert_test_finding):
     client, _, _ = api_env
     finding = insert_test_finding()
-    filed = client.post("/api/reports", json={"finding_id": finding["id"]})
-    assert filed.status_code == 201
-    report_id = filed.json()["id"]
+    report = client.app.state.runtime.report_queue.maybe_auto_file(finding)
+    assert report is not None
+    report_id = report["id"]
     advanced = client.post(f"/api/reports/{report_id}/advance", json={"status": "SEEN"})
     assert advanced.status_code == 200
     assert advanced.json()["status"] == "SEEN"

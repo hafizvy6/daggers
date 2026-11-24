@@ -7,6 +7,7 @@ the images; they stay under GALLERY_DIR on the machine that runs the renderer.
 Examples:
   python ops/capture_reference.py adnoc.ae adcb.ae
   python ops/capture_reference.py --all-brands
+  python ops/capture_reference.py adnoc.ae --force   # replace a bad cached capture
 """
 from __future__ import annotations
 
@@ -40,7 +41,7 @@ async def main_async(args: argparse.Namespace) -> int:
         if not host or host in seen:
             continue
         seen.add(host)
-        result = await render_for_reference(host, settings)
+        result = await render_for_reference(host, settings, force=args.force)
         if result.screenshot_path and Path(result.screenshot_path).exists():
             print(f"OK   {host} -> {result.screenshot_path}")
             ok += 1
@@ -54,6 +55,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("domains", nargs="*", help="official domains or hosts, e.g. adnoc.ae")
     parser.add_argument("--all-brands", action="store_true", help="capture every catalogued official domain")
+    parser.add_argument("--force", action="store_true", help="overwrite existing reference captures")
     args = parser.parse_args()
     if not args.domains and not args.all_brands:
         parser.error("pass one or more domains, or --all-brands")

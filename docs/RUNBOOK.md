@@ -58,9 +58,9 @@ make check            # compileall + i18n/design gate + node syntax + extension 
 | `CORS_ORIGIN_REGEX` | — | controlled alternative, e.g. `^https://[a-z0-9-]+\.pages\.dev$` |
 | `MALICIOUS_THRESHOLD` / `SUSPICIOUS_THRESHOLD` | `0.65` / `0.35` | verdict cut-offs |
 | `RENDER_SCORE_MIN` | `0.45` | minimum triage score before spending a render |
-| `AUTOFILE_CLONE_MIN` | `90` | clone % sufficient for auto-filed reports; a confirmed phishing-feed match also suffices |
+| `AUTOFILE_CLONE_MIN` | `90` | clone % corroboration required before a queued fake may be submitted externally; a confirmed phishing-feed match also suffices |
 | `RADAR_MIN_DISPLAY_SCORE` | `0.35` | minimum score for actionable Radar findings; CT-only `UNKNOWN` rows are suppressed |
-| `AUTO_REPORT_ENABLED` | `1` | allow automatic zero-PII report creation for confirmed findings |
+| `AUTO_REPORT_ENABLED` | `1` | allow automatic zero-PII dossier creation for actionable findings |
 | `POLICE_INTAKE_ENABLED` | `0` | enable authorized external police-intake submission |
 | `POLICE_INTAKE_URL` | — | HTTPS endpoint supplied by the receiving authority; required for live submission |
 | `POLICE_INTAKE_TIMEOUT_S` | `10` | submission timeout; failures keep the report QUEUED |
@@ -126,7 +126,7 @@ curl -N  localhost:8000/api/stream   # heartbeat; real findings appear as events
 
 Use **Analyst queue** in the Radar feed (or `include_unknown=true&include_suppressed=true`) to review suppressed candidates. Opening a finding offers `Official`, `Scam`, `Unrelated`, and `Parked` labels; the latter three are suppressed from the default feed and skipped by future radar enrichment. Labels contain no free text or PII.
 
-`AUTO_REPORT_ENABLED=1` (default) lets the system create a zero-PII report automatically when a finding is **MALICIOUS plus confirmation** (`clone >= AUTOFILE_CLONE_MIN` or a confirmed phishing-feed match). Creation does not invent an external destination: without `POLICE_INTAKE_ENABLED=1` and `POLICE_INTAKE_URL`, the report remains **QUEUED** in the portal for an authorized operator workflow. When an authority supplies an HTTPS endpoint, set `POLICE_INTAKE_ENABLED=1`, `POLICE_INTAKE_URL`, and optionally `POLICE_INTAKE_TOKEN`; the adapter sends only `schema`, `report_id`, `finding_id`, the zero-PII evidence, `blocked_hits`, and `auto`. On any non-2xx response, timeout, or network failure the report stays **QUEUED**. Never publish a token in the browser or Git.
+`AUTO_REPORT_ENABLED=1` (default) automatically creates a zero-PII portal dossier for every actionable finding (`SUSPICIOUS`, `MISLEADING`, or `MALICIOUS`). There is no separate manual filing action. Automation does not invent an external destination or certify every dossier: without `POLICE_INTAKE_ENABLED=1` and `POLICE_INTAKE_URL`, every report remains **QUEUED** in the portal. Even with an intake configured, a dossier is submitted only when it is `MALICIOUS` **and** corroborated (`clone >= AUTOFILE_CLONE_MIN` or a confirmed phishing-feed match); weaker actionable dossiers remain queued. When an authority supplies an HTTPS endpoint, set `POLICE_INTAKE_ENABLED=1`, `POLICE_INTAKE_URL`, and optionally `POLICE_INTAKE_TOKEN`; the adapter sends only `schema`, `report_id`, `finding_id`, the zero-PII evidence, `blocked_hits`, and `auto`. On any non-2xx response, timeout, or network failure the report stays **QUEUED**. Never publish a token in the browser or Git.
 
 ## 5. Sweep (Search / Maps)
 

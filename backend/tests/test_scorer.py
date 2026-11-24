@@ -249,3 +249,14 @@ def test_claim_with_feed_proof_can_be_malicious(scoring_kwargs):
     )
     assert result.verdict == "MALICIOUS"
     assert result.scam_type == "known-phishing-url"
+
+def test_exact_brand_label_on_foreign_registry_is_not_a_confirmed_fake(scoring_kwargs):
+    # Findings #26/#44: exact ASCII brand labels on other registries
+    # (dewa.co.jp, etisalat.af) are brand misuse — never "confirmed imitation".
+    for url in ("https://dewa.co.jp/", "https://etisalat.af/"):
+        result = score(url, scoring_kwargs)
+        assert result.homograph["spoof"] is False
+        assert result.homograph["mixed_script"] is False
+        assert "homograph.mixed_or_spoof" not in result.l1_detail
+        assert result.verdict != "MALICIOUS", url
+        assert result.score < 0.65, url

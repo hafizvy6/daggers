@@ -30,10 +30,13 @@ export default async function Sweep() {
     el("span", { html: icons.sweep({ size: 18 }) }), el("span", { text: t("sweep.run") }));
   const pills = el("div", { class: "pill-row" });
   let querySets = { web: [], maps: [] };
+  let arbitraryAllowed = false;
   getExamples().then((ex) => {
     querySets = { web: ex.sweep_web || [], maps: ex.sweep_maps || [] };
+    arbitraryAllowed = !!ex.sweep_arbitrary;
+    queryInput.placeholder = arbitraryAllowed ? t("sweep.emptyQuery") : t("sweep.freeTextOffPlaceholder");
     paintQueries();
-  }).catch(() => { /* offline with no cache: type your own query */ });
+  }).catch(() => { queryInput.placeholder = t("sweep.emptyQuery"); });
   function paintQueries() {
     const list = channel === "maps" ? querySets.maps : querySets.web;
     const buttons = list.map((x) => {
@@ -78,8 +81,18 @@ export default async function Sweep() {
     let data;
     try {
       data = await getSweep(channel === "maps" ? "maps" : "web", query, queryId);
-    } catch {
-      resultsHost.replaceChildren(errorCard({ title: t("common.errorTitle"), body: t("common.errorBody") }));
+    } catch (err) {
+      let card_;
+      if (err?.status === 403) {
+        card_ = emptyState({ title: t("sweep.freeTextOffTitle"), body: t("sweep.freeTextOffBody") });
+      } else if (err?.status === 429) {
+        card_ = emptyState({ title: t("sweep.rateLimitedTitle"), body: t("sweep.rateLimitedBody") });
+      } else if (err?.status === 422) {
+        card_ = emptyState({ title: t("sweep.freeTextOffTitle"), body: err.detail || t("sweep.freeTextOffBody") });
+      } else {
+        card_ = errorCard({ title: t("common.errorTitle"), body: t("common.errorBody") });
+      }
+      resultsHost.replaceChildren(card_);
       running = false; runBtn.disabled = false; runBtn.lastChild.textContent = t("sweep.run");
       return;
     }

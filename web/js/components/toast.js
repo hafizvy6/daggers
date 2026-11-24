@@ -24,4 +24,3 @@ export function toast(message, { kind = "neutral", tag = "", ms = 4200 } = {}) {
   return node;
 }
 
-export const toastFiled = () => toast(t("finding.filedToast"), { kind: "good", tag: t("common.filed"), ms: 5200 });

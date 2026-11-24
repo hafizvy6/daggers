@@ -28,7 +28,7 @@ Interactive OpenAPI is served at `/docs`; the machine schema is at `/openapi.jso
 | GET | `/api/sweep/{id}` | — | stored `SweepRun` or 404 |
 | GET | `/api/reports` | — | `{"reports":[Report…]}` |
 | GET | `/api/reports/{id}` | — | one `Report` |
-| POST | `/api/reports` | `{finding_id}` or `{domain}` | file report; 201 on create, 200 on idempotent re-file |
+| POST | `/api/reports` | — | removed; 410. Actionable findings auto-queue a zero-PII dossier |
 | POST | `/api/reports/{id}/advance` | `{"status":"QUEUED"|"SUBMITTED"|"SEEN"}` | advanced `Report` |
 | GET | `/api/reports/{id}/export` | — | evidence-pack JSON download |
 | POST | `/api/report/{id}/analysis` | — | SSE `delta` events + `final` EN/AR summary |
