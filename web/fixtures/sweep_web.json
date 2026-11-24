@@ -1,0 +1,116 @@
+{
+  "id": 9,
+  "query": "Emirates NBD refund",
+  "query_ar": "استرجاع بنك الإمارات دبي الوطني",
+  "lang": "en",
+  "channel": "web",
+  "engine": "serper",
+  "cached": true,
+  "results": [
+    {
+      "position": 1,
+      "url": "https://www.emiratesnbd.com/en/personal/refunds",
+      "title": "Refunds & disputes | Emirates NBD",
+      "snippet": "How to raise a refund request with Emirates NBD and how long it takes.",
+      "verdict": "SAFE",
+      "score": 0.02,
+      "reasons": [
+        "matches the official Emirates NBD domain"
+      ],
+      "finding_id": 41
+    },
+    {
+      "position": 2,
+      "url": "https://emiratesnbd-refund.help/claim",
+      "title": "Emirates NBD Refund — Claim Your Refund Now",
+      "snippet": "Fast refund approval. Enter your IBAN and the one-time code to receive your money within 24 hours.",
+      "verdict": "MALICIOUS",
+      "score": 0.88,
+      "reasons": [
+        "brand name 'emiratesnbd' on a non-official domain",
+        "94% visual match with the real refund page",
+        "asks for IBAN and a one-time code"
+      ],
+      "finding_id": 41,
+      "reasons_ar": [
+        "اسم العلامة «emiratesnbd» على نطاق غير رسمي",
+        "تطابق بصري 94% مع صفحة الاسترجاع الأصلية",
+        "يطلب رقم الآيبان ورمز التحقق"
+      ]
+    },
+    {
+      "position": 3,
+      "url": "https://www.emiratesnbd.com/en/help/refund-policy",
+      "title": "Refund policy | Emirates NBD",
+      "snippet": "The official refund policy, step by step.",
+      "verdict": "SAFE",
+      "score": 0.03,
+      "reasons": [
+        "matches the official Emirates NBD domain"
+      ],
+      "finding_id": 41
+    },
+    {
+      "position": 4,
+      "url": "https://emiratesnbd-refunds.pro/track",
+      "title": "Emirates NBD Refunds — Track Your Case",
+      "snippet": "Track a refund case. Pay a 49 AED processing fee to release it.",
+      "verdict": "SUSPICIOUS",
+      "score": 0.57,
+      "reasons": [
+        "brand name on a non-official domain",
+        "'processing fee' request that no bank charges",
+        "certificate issued 3 hours ago"
+      ],
+      "finding_id": null,
+      "reasons_ar": [
+        "اسم العلامة على نطاق غير رسمي",
+        "طلب «رسم معالجة» لا يتقاضاه أي بنك",
+        "صدرت الشهادة قبل 3 ساعات"
+      ]
+    },
+    {
+      "position": 5,
+      "url": "https://www.gulfnews.com/business/banking/uae-refund-scams",
+      "title": "How refund scams work in the UAE — Gulf News",
+      "snippet": "Banks never ask for your one-time code. Here is what to watch for.",
+      "verdict": "SAFE",
+      "score": 0.04,
+      "reasons": [
+        "established news domain — no impersonation"
+      ],
+      "finding_id": null
+    },
+    {
+      "position": 6,
+      "url": "https://enbd-helpdesk.click/refund",
+      "title": "Emirates NBD Helpdesk — 24/7 Refund Support",
+      "snippet": "Talk to an agent. Enter your card number to verify.",
+      "verdict": "MALICIOUS",
+      "score": 0.83,
+      "reasons": [
+        "brand name on a non-official domain",
+        "asks for the full card number",
+        "certificate issued 5 hours ago"
+      ],
+      "finding_id": null,
+      "reasons_ar": [
+        "اسم العلامة على نطاق غير رسمي",
+        "يطلب رقم البطاقة كاملًا",
+        "صدرت الشهادة قبل 5 ساعات"
+      ]
+    },
+    {
+      "position": 7,
+      "url": "https://www.emiratesnbd.com/en/personal/credit-cards",
+      "title": "Credit cards | Emirates NBD",
+      "snippet": "Compare the official Emirates NBD credit cards.",
+      "verdict": "SAFE",
+      "score": 0.02,
+      "reasons": [
+        "matches the official Emirates NBD domain"
+      ],
+      "finding_id": 41
+    }
+  ]
+}

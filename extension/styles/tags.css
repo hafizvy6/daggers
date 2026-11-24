@@ -1,0 +1,26 @@
+/* Daggers Shield labels. Colour is never the only signal: every label carries its word. */
+.daggers-tag {
+  display: inline-block;
+  margin: 2px 0 2px 8px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font: 600 11px/16px system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  letter-spacing: 0.03em;
+  vertical-align: middle;
+  border: 1px solid transparent;
+  cursor: help;
+  white-space: nowrap;
+}
+.daggers-tag--safe { background: #e6f4ea; color: #0d652d; border-color: #81c995; }
+.daggers-tag--warning { background: #fef7e0; color: #7a4f01; border-color: #fdd663; }
+.daggers-tag--misleading { background: #f3e8fd; color: #681da8; border-color: #c58af9; }
+.daggers-tag--fake { background: #fce8e6; color: #a50e0e; border-color: #f28b82; }
+.daggers-tag--unchecked, .daggers-tag--pending { background: #f1f3f4; color: #5f6368; border-color: #dadce0; }
+.daggers-tag--fake::before { content: "\26A0\FE0E  "; }
+@media (prefers-color-scheme: dark) {
+  .daggers-tag--safe { background: #0d652d; color: #e6f4ea; }
+  .daggers-tag--warning { background: #7a4f01; color: #fef7e0; }
+  .daggers-tag--misleading { background: #4a148c; color: #f3e8fd; }
+  .daggers-tag--fake { background: #8c1d18; color: #fce8e6; }
+  .daggers-tag--unchecked, .daggers-tag--pending { background: #3c4043; color: #e8eaed; }
+}

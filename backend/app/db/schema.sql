@@ -61,7 +61,8 @@ CREATE TABLE IF NOT EXISTS sweep_results (
     verdict         TEXT,
     score           REAL,
     reasons         TEXT,
-    finding_id      INTEGER
+    finding_id      INTEGER,
+    detail          TEXT
 );
 
 CREATE TABLE IF NOT EXISTS guard_hits (

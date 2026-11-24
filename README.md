@@ -1,8 +1,8 @@
-# Daggers — Brain & Evidence (Workstream 1)
+# Daggers — Integrated Brain, Shield & Face
 
-> **We catch it, we prove it, we report it.** Daggers protects people from scam websites, messages, and numbers and files confirmed scams with evidence. This checkout implements **WS1: the deterministic brain, radar, evidence pipeline, SQLite store, exact API contracts, offline demo mode, and seed-on-boot**.
+> **We catch it, we prove it, we report it.** Daggers protects people from scam websites, messages, and numbers and files confirmed scams with evidence. This checkout combines **WS1** (deterministic brain, radar, evidence, SQLite, exact core contracts), **WS2** (Guard, Sweep, Search/Maps adapters, extension), and **WS3** (bilingual PWA, portal, demo ops, AI Analyst) in one FastAPI process.
 
-The other lanes can land later without renegotiating contracts: WS2 owns Guard/Sweep/Extension; WS3 owns the bilingual PWA, portal UI, and AI Analyst. `main.py` mounts their routers defensively when the modules exist, so this repository boots complete with only WS1 present.
+The deterministic `core/` engine remains the single source of truth. WS2 calls it in-process and consumes `/api/guard/feed`; WS3 renders its C1–C5 contracts and may stream explanations, but AI never writes `verdict`, `score`, or `reasons`. `main.py` mounts WS2/WS3 routers and serves `web/` statically.
 
 ---
 
@@ -34,6 +34,8 @@ curl -X POST http://localhost:8000/api/scan \
   -d '{"kind":"url","input":"https://adcb-secure-login.xyz/login","lang":"en"}'
 open http://localhost:8000/docs
 ```
+
+The integrated build also serves the bilingual WS3 PWA at `http://localhost:8000/`. Use `http://localhost:8000/?mode=demo#/feed` for the fully offline UI story; `/docs` remains the machine-readable API entry point.
 
 Use `make dev` for live tables with external pollers still disabled, `make test` for the brain/API suite, `make gallery` to regenerate the committed 60-shot perceptual-hash index, and `make check` for compile + tests.
 
@@ -67,6 +69,8 @@ Playwright · pHash · ORB      ───────▶  vision/ │
 - **Every external adapter has a fixture fallback and a timeout**.
 - **Reports contain only fake-site artifacts**: domain, verdict, reasons, timestamps, evidence path, clone, gallery match. User input never enters a report.
 - **Renderer safety**: 15-second timeout, read-only request guard, no downloads, no credentials, and no form submission. Disabled by default with `RENDER_ENABLED=0`.
+- **WS2 channels** call the same `core/` engine in-process; `guard/` syncs the WS1 JSONL feed and `extension/` only paints API tags.
+- **WS3 UI/AI** render C1–C5 from the backend and stream evidence-only explanations; the template fallback keeps the demo alive with no keys.
 
 See `docs/ARCHITECTURE.md`, `docs/API.md`, and `docs/RUNBOOK.md`.
 
@@ -182,13 +186,18 @@ Cyrillic `а` + Latin `mazon.ae` decodes from `xn--mazon-3ve.ae`, folds to `amaz
 
 ## Ownership boundaries
 
-**WS1 owns:** `backend/app/main.py`, `config.py`, `core/**`, `radar/**`, `vision/**`, `db/**`, `reports/**`, `api/findings.py`, `api/scan.py`, `api/health.py`, `api/stream.py`, `backend/seed/**`, `backend/tests/**`, root build files, and WS1 docs.
+**WS1 owns:** `backend/app/main.py`, `config.py`, `core/**`, `radar/**`, `vision/**`, `db/**`, `reports/**`, `api/findings.py`, `api/scan.py`, `api/health.py`, `api/stream.py`, `backend/seed/**`, core tests, root build files, and shared docs.
 
-**Defensively mounted if present:** `backend.app.api.sweep`, `.guard`, `.reports`, `.ai`. WS2/WS3 files are not touched by this lane. A static `web/` directory, if WS3 adds it, is mounted at `/`.
+**WS2 owns:** `guard/**`, `backend/app/channels/**`, `backend/app/api/sweep.py`, `backend/app/api/guard.py`, `backend/tests/ws2/**`, and `extension/**`.
 
-### Scope audit
+**WS3 owns:** `web/**`, `backend/app/ai/**`, `backend/app/api/ai.py`, `backend/app/api/reports.py`, `ops/**`, WS3 docs, and `backend/tests/ws3/**`.
 
-No `web/**`, `guard/**`, `channels/**`, `extension/**`, `backend/app/ai/**`, `backend/app/api/sweep.py`, `backend/app/api/guard.py`, `backend/app/api/reports.py`, `backend/app/api/ai.py`, or `ops/demo/**` files were created. The technical spec explicitly assigns `docs/**` and the shared backend skeleton to WS1 at hour 0–2, so only `docs/ARCHITECTURE.md`, `docs/API.md`, and `docs/RUNBOOK.md` are included here. Small WS1 infrastructure files (`__init__.py`, `catalog.py`, `seed.py`, `.gitignore`, `.dockerignore`, and test fixtures) exist only to make the owned modules importable, seedable, testable, and free of generated artifacts in Git.
+**Shared integration seam:** `main.py` mounts optional routers and static `web/`; `db/repo.py` owns all SQL including sweep persistence; `.env.example`, `Makefile`, and `Dockerfile` expose the combined offline switches. See `docs/INTEGRATION.md` for the exact branch/path mapping.
+
+### Integration audit
+
+The teammate branches were imported by flattening their nested `daggers/` and `daggers-ws2-mohamed/` wrappers into the WS1 root. Standalone WS3 `server.py`/`store.py`, duplicate root `README.md`, duplicate `backend/requirements.txt`, wrapper-shaped WS3 seed fixtures, and standalone demo-server tests are intentionally excluded. No second FastAPI app, second store, or second verdict implementation exists.
+
 
 ---
 
@@ -199,9 +208,10 @@ make test
 # or: .venv/bin/python -m pytest backend/tests -q
 ```
 
-The **93-check** suite covers scorer weights and thresholds, a 24-case golden accuracy matrix, claim-only `MISLEADING` capping, IDN/confusable homographs, official-domain allowlisting, EN/AR/Arabizi claims, offline number patterns, exact API schemas, JSONL Guard feed, configurable misleading-block policy, evidence JPEGs, seed-on-boot, SSE runtime, graceful enrichment-failure shape, zero-PII report validation, FreeType/font fallbacks, committed-gallery seed behavior, and a file-level WS2/WS3 scope audit.
+The **199-check** suite covers the original WS1 scorer/API/evidence contracts, the imported WS2 channel/official-registry tests, WS3 AI privacy/fallback tests, and integration checks for static shell/share target, optional router mounting, SQLite sweep persistence, Guard aliases/blocklist, report/AI routes, and the absence of duplicate root wrappers.
 
-Definition of Done verified here: `make seed && make demo` cold start; `/api/status`; C1/C2/C4/C6 shapes; `аmazon.ae`; 200-number seed; readable evidence JPG; zero-PII validation; seed-on-boot by deleting `backend/data`; Docker render-disabled fallback. `make test` suppresses a harmless Starlette/AnyIO deprecation warning from the installed test client; no application warnings or errors are emitted.
+
+Definition of Done verified here: `make seed && make demo` cold start; `/api/status`; C1/C2/C4/C6 shapes; `аmazon.ae`; 200-number seed; readable evidence JPG; zero-PII validation; seed-on-boot; WS2 sweep/Guard endpoints; WS3 PWA, reports, portal AI/takedown routes; Docker render-disabled fallback. `make test` suppresses a harmless Starlette/AnyIO deprecation warning from the installed test client; no application warnings or errors are emitted.
 
 ---
 

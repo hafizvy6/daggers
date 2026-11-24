@@ -1,0 +1,80 @@
+{
+  "_label": "SYNTHETIC TEST FIXTURE — fabricated search results for offline demo/tests. Not real search output.",
+  "queries": {
+    "_default": [
+      {
+        "url": "https://sunrise-bakery.example/",
+        "title": "Sunrise Bakery",
+        "snippet": "[SYNTHETIC TEST FIXTURE] Fresh bread daily."
+      },
+      {
+        "url": "https://www.adpolice.gov.ae/",
+        "title": "Abu Dhabi Police (real domain, registry entry pending)",
+        "snippet": "[SYNTHETIC TEST FIXTURE] Official site placeholder snippet written for tests."
+      }
+    ],
+    "pay abu dhabi police traffic fines online": [
+      {
+        "url": "https://www.adpolice.gov.ae/en/services",
+        "title": "Abu Dhabi Police — services",
+        "snippet": "[SYNTHETIC TEST FIXTURE] Placeholder snippet written for tests; not copied from the real site."
+      },
+      {
+        "url": "https://www.google.com/url?q=https://adpolice-fines-pay.example/login%3Futm_source%3Dads&sa=U",
+        "title": "Pay your fines in 1 minute",
+        "snippet": "[SYNTHETIC TEST FIXTURE] Abu Dhabi Police fines discount 50% today only, call +971 50 123 4567"
+      },
+      {
+        "url": "https://adpolice-fines-pay.example/login",
+        "title": "duplicate of the result above",
+        "snippet": "[SYNTHETIC TEST FIXTURE] duplicate"
+      },
+      {
+        "url": "javascript:alert(1)",
+        "title": "bad scheme",
+        "snippet": "[SYNTHETIC TEST FIXTURE] should be rejected"
+      },
+      {
+        "url": "https://abudhabipolice-gov.example.xyz/pay/now",
+        "title": "Abu Dhabi Police payment",
+        "snippet": "[SYNTHETIC TEST FIXTURE] Settle traffic fines with card"
+      },
+      {
+        "url": "https://uae-traffic-blog.example/how-to-pay-fines",
+        "title": "How to pay traffic fines in the UAE",
+        "snippet": "[SYNTHETIC TEST FIXTURE] A blog post explaining official payment channels."
+      }
+    ],
+    "uae visa amnesty registration": [
+      {
+        "url": "https://icp-amnesty-register.example/apply",
+        "title": "Register for visa amnesty",
+        "snippet": "[SYNTHETIC TEST FIXTURE] ICP announces visa amnesty for overstayers, register before 31 December 2026, fee AED 250"
+      },
+      {
+        "url": "https://khaleejtimes.com/uae/visa-news",
+        "title": "Visa news",
+        "snippet": "[SYNTHETIC TEST FIXTURE] Independent media article placeholder written for tests."
+      }
+    ],
+    "uae national day giveaway 1 million dirhams": [
+      {
+        "url": "https://uae-nationalday-gift.example.top/claim",
+        "title": "National Day giveaway",
+        "snippet": "[SYNTHETIC TEST FIXTURE] UAE government giving away 1 million dirhams, claim your prize now"
+      },
+      {
+        "url": "https://xn--dubaipolce-6ub.example/",
+        "title": "Dubai Police reward",
+        "snippet": "[SYNTHETIC TEST FIXTURE] Dubai Police reward winners"
+      }
+    ],
+    "دفع مخالفات شرطة أبوظبي": [
+      {
+        "url": "https://adpolice-pay-ar.example/",
+        "title": "دفع المخالفات",
+        "snippet": "[SYNTHETIC TEST FIXTURE] شرطة أبوظبي خصم ٥٠٪ على المخالفات المرورية اليوم فقط"
+      }
+    ]
+  }
+}

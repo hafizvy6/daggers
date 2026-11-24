@@ -10,7 +10,7 @@ OPTIONAL_RENDER_PKGS = imagehash==4.3.2 $(NUMPY_PIN) opencv-python-headless==5.1
 .PHONY: help bootstrap install install-render seed gallery dev demo test check clean deploy snapshot
 
 help:
-	@echo "Daggers WS1: bootstrap · seed · dev · demo · test · check · gallery · deploy"
+	@echo "Daggers: bootstrap · seed · dev · demo · test · check · gallery · deploy"
 
 bootstrap:
 	@test -n "$(BOOTSTRAP_PYTHON)" || { echo "Python 3.11+ is required"; exit 1; }
@@ -39,6 +39,7 @@ dev: seed
 
 demo: seed
 	MODE=demo DEMO_MODE=1 CRT_ENABLED=0 FEEDS_ENABLED=0 ENRICH_ENABLED=0 RENDER_ENABLED=0 \
+	SWEEP_ALLOW_ARBITRARY=1 AI_PROVIDER=template \
 	$(PYTHON) -m uvicorn backend.app.main:app --host $(HOST) --port $(PORT)
 
 test:

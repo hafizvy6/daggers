@@ -46,6 +46,11 @@ def _json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
+def _json_with_default(value: Any) -> str:
+    """JSON for WS2 additive sweep fields; unusual objects degrade to strings."""
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"), default=str)
+
+
 def canonical_finding(value: Mapping[str, Any]) -> dict:
     reasons = value.get("reasons") or []
     if isinstance(reasons, str):
@@ -112,6 +117,13 @@ class Repository:
                 self._conn.execute("PRAGMA journal_mode=WAL")
                 self._conn.execute("PRAGMA foreign_keys=ON")
                 self._conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
+                # Additive migration for WS1 databases created before WS2 landed.
+                columns = {
+                    str(row["name"])
+                    for row in self._conn.execute("PRAGMA table_info(sweep_results)").fetchall()
+                }
+                if "detail" not in columns:
+                    self._conn.execute("ALTER TABLE sweep_results ADD COLUMN detail TEXT")
                 self._conn.commit()
         return missing
 
@@ -563,6 +575,9 @@ class Repository:
         return {
             "blocked_domains": len(rows),
             "blocked_hits": total_hits,
+            # WS3 guard view aliases; WS1 keys remain authoritative.
+            "blocked_today": total_hits,
+            "feed_size": len(rows),
             "mode": mode,
         }
 
@@ -651,6 +666,123 @@ class Repository:
                 (status, filed_at, int(report_id)),
             )
         return self.get_report(int(report_id))
+
+    # ---------------------------------------------------------------- sweeps
+
+    def create_sweep_run(
+        self,
+        *,
+        query: str,
+        lang: str,
+        channel: str,
+        engine: str,
+        cached: bool,
+    ) -> dict:
+        created_at = utc_now()
+        with self._lock, self.conn:
+            cursor = self.conn.execute(
+                "INSERT INTO sweep_runs(query, lang, channel, engine, cached, created_at) "
+                "VALUES(?, ?, ?, ?, ?, ?)",
+                (str(query), str(lang), str(channel), str(engine), 1 if cached else 0, created_at),
+            )
+            run_id = int(cursor.lastrowid)
+        return {
+            "id": run_id,
+            "query": str(query),
+            "lang": str(lang),
+            "channel": str(channel),
+            "engine": str(engine),
+            "cached": bool(cached),
+            "created_at": created_at,
+            "query_id": None,
+        }
+
+    def add_sweep_results(self, run_id: int, results: Iterable[Mapping[str, Any]]) -> None:
+        base_keys = {
+            "position", "url", "title", "snippet", "verdict", "score",
+            "reasons", "finding_id",
+        }
+        rows: list[tuple[Any, ...]] = []
+        for index, result in enumerate(results, 1):
+            item = dict(result)
+            reasons = item.get("reasons") or []
+            if isinstance(reasons, str):
+                reasons = [reasons]
+            detail = {key: value for key, value in item.items() if key not in base_keys}
+            rows.append(
+                (
+                    int(run_id),
+                    int(item.get("position") or index),
+                    str(item.get("url") or ""),
+                    item.get("title"),
+                    item.get("snippet"),
+                    item.get("verdict"),
+                    float(item.get("score") or 0.0),
+                    _json_with_default(list(reasons)),
+                    item.get("finding_id"),
+                    _json_with_default(detail),
+                )
+            )
+        if not rows:
+            return
+        with self._lock, self.conn:
+            self.conn.executemany(
+                "INSERT INTO sweep_results(run_id, position, url, title, snippet, verdict, "
+                "score, reasons, finding_id, detail) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                rows,
+            )
+
+    def get_sweep_run(self, run_id: int) -> dict | None:
+        def loads(raw: Any, default: Any) -> Any:
+            if raw is None or raw == "":
+                return default
+            try:
+                return json.loads(raw)
+            except (TypeError, json.JSONDecodeError):
+                return default
+
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT * FROM sweep_runs WHERE id = ?", (int(run_id),)
+            ).fetchone()
+            if row is None:
+                return None
+            stored = self.conn.execute(
+                "SELECT * FROM sweep_results WHERE run_id = ? ORDER BY position, id",
+                (int(run_id),),
+            ).fetchall()
+
+        results: list[dict] = []
+        for stored_row in stored:
+            detail = loads(stored_row["detail"], {})
+            if not isinstance(detail, dict):
+                detail = {}
+            reasons = loads(stored_row["reasons"], [])
+            if not isinstance(reasons, list):
+                reasons = [str(reasons)]
+            result = {
+                "position": int(stored_row["position"]),
+                "url": str(stored_row["url"] or ""),
+                "title": stored_row["title"],
+                "snippet": stored_row["snippet"],
+                "verdict": stored_row["verdict"],
+                "score": float(stored_row["score"] or 0.0),
+                "reasons": reasons,
+                "finding_id": stored_row["finding_id"],
+            }
+            result.update(detail)
+            results.append(result)
+        return {
+            "id": int(row["id"]),
+            "query": str(row["query"]),
+            "lang": str(row["lang"]),
+            "channel": str(row["channel"]),
+            "engine": str(row["engine"]),
+            "cached": bool(row["cached"]),
+            "created_at": str(row["created_at"]),
+            "query_id": None,
+            "results": results,
+        }
 
     # -------------------------------------------------------------- feed labels
 

@@ -1,0 +1,75 @@
+# Daggers WS2 — bilingual claim lexicon (deterministic; no AI matching).
+# Terms are matched as whole tokens after Arabic/English normalization
+# (diacritics, tatweel, Alef/Ya, Arabic-Indic digits). Arabic proclitics
+# (و ب ل ال) are tolerated by the matcher.
+version: 1
+
+# Claim categories. A government claim needs a category AND an entity.
+categories:
+  giveaway:
+    en: [giveaway, give away, giving away, prize, prizes, lottery, raffle, winner, winners, you won, reward, free cash, gift card, cash prize, draw]
+    ar: [جائزة, جوائز, هدية, هدايا, يانصيب, سحب, فزت, ربحت, مكافأة, مكافاة, توزيع]
+  financial_aid:
+    en: [grant, grants, financial aid, financial support, subsidy, subsidies, allowance, compensation, stimulus, cash support, benefit, benefits, support payment]
+    ar: [منحة, منح, دعم مالي, مساعدة مالية, مساعدات, اعانة, تعويض, تعويضات, علاوة]
+  fees:
+    en: [fee, fees, charge, charges, tariff, service fee, cost, costs]
+    ar: [رسوم, رسم, تعرفة, تكلفة]
+  immigration:
+    en: [visa, visas, residency, residence, golden visa, amnesty, entry permit, overstay, overstayers, deportation, emirates id, sponsorship]
+    ar: [تاشيرة, تاشيرات, اقامة, الاقامة الذهبية, عفو, تصريح دخول, مخالفي الاقامة, ترحيل, الهوية, كفالة]
+  police_warning:
+    en: [warning, warns, warned, alert, beware, arrest, arrested, wanted, account suspended, account frozen, blocked account]
+    ar: [تحذير, يحذر, تحذر, حذرت, تنبيه, احذروا, القبض, تجميد الحساب, ايقاف الحساب]
+  traffic:
+    en: [traffic fine, traffic fines, black points, fine discount, speeding, impounded]
+    ar: [مخالفة مرورية, مخالفات مرورية, النقاط السوداء, خصم المخالفات, حجز المركبة]
+  announcement:
+    en: [announces, announced, announcement, launches, launched, decision, decree, new law, resolution, circular, initiative]
+    ar: [تعلن, اعلنت, اعلان, تطلق, اطلقت, قرار, مرسوم, قانون جديد, تعميم, مبادرة]
+
+# Regulated categories: Class B media alone cannot establish their legal or
+# current validity when a responsible Class A authority is available.
+regulated_categories: [fees, financial_aid, immigration, traffic, giveaway]
+
+# Cross-lingual concepts: what the claim is about, independent of language.
+concepts:
+  visa: {en: [visa, visas], ar: [تاشيرة, تاشيرات, فيزا]}
+  golden_visa: {en: [golden visa], ar: [الاقامة الذهبية, الفيزا الذهبية, التاشيرة الذهبية]}
+  residency: {en: [residency, residence permit, residence], ar: [اقامة, الاقامة]}
+  amnesty: {en: [amnesty, grace period], ar: [عفو, مهلة]}
+  overstay: {en: [overstay, overstayers, violators], ar: [مخالفي الاقامة, المخالفين]}
+  fine: {en: [fine, fines, penalty, penalties], ar: [غرامة, غرامات, مخالفة, مخالفات]}
+  discount: {en: [discount, reduction, waiver, exemption], ar: [خصم, تخفيض, اعفاء]}
+  traffic: {en: [traffic, vehicle, driving], ar: [مرور, مرورية, مركبة]}
+  emirates_id: {en: [emirates id, id card], ar: [الهوية, بطاقة الهوية]}
+  renewal: {en: [renewal, renew], ar: [تجديد]}
+  grant: {en: [grant, aid, support, subsidy, allowance], ar: [منحة, دعم, مساعدة, اعانة, علاوة]}
+  housing: {en: [housing, home loan], ar: [سكن, اسكان]}
+  prize: {en: [prize, prizes, giveaway, giving away, give away, lottery, raffle, reward, cash prize, cash prizes], ar: [جائزة, جوائز, هدية, يانصيب, سحب, مكافاة]}
+  fee: {en: [fee, fees, tariff], ar: [رسوم, رسم, تعرفة]}
+  bank_account: {en: [bank account, account suspended, account frozen, card blocked], ar: [الحساب البنكي, تجميد الحساب, ايقاف الحساب]}
+  fraud: {en: [scam, scams, fraud, phishing, fake], ar: [احتيال, نصب, مزيف, مزيفة, وهمي]}
+  unemployment: {en: [unemployment, job loss], ar: [بطالة, فقدان الوظيفة]}
+  utility_bill: {en: [electricity bill, water bill, utility bill], ar: [فاتورة الكهرباء, فاتورة المياه]}
+  licence: {en: [license, licence, permit], ar: [رخصة, ترخيص, تصريح]}
+  national_day: {en: [national day, eid al etihad], ar: [اليوم الوطني, عيد الاتحاد]}
+
+# Broad concepts: shared broad concepts alone do not make two statements about
+# the same thing when either side names a specific concept.
+generic_concepts: [visa, residency, fine, fee, grant, traffic, licence, fraud]
+
+# Generic government vocabulary (entity not resolved to a registry entry).
+government_terms:
+  en: [government, ministry, police, federal authority, authority, municipality, customs, uae government, abu dhabi government, dubai government, cabinet]
+  ar: [حكومة, الحكومة, وزارة, شرطة, هيئة, الهيئة الاتحادية, بلدية, جمارك, مجلس الوزراء]
+
+# Markers that an official record DENIES or warns against a claim.
+denial_markers:
+  en: [no such, fake, false, rumour, rumours, rumor, rumors, baseless, not true, untrue, did not announce, has not announced, never, fraudulent, beware of, denies, denied, scam, scams, phishing, not issued, does not send]
+  ar: [لا صحة, شائعة, شائعات, مزيف, مزيفة, غير صحيح, غير صحيحة, احتيال, تنفي, نفت, وهمي, وهمية, لم تعلن, لا ترسل]
+
+# Markers that a record supersedes earlier guidance.
+supersession_markers:
+  en: [replaces, supersedes, updated, amended, revised, no longer, cancelled, extended]
+  ar: [يحل محل, تعديل, معدل, محدث, الغاء, تمديد, لم يعد]

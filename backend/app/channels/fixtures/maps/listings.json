@@ -1,0 +1,65 @@
+{
+  "_label": "SYNTHETIC TEST FIXTURE — fabricated map listings. Not real businesses or Google data.",
+  "queries": {
+    "police service centre abu dhabi": [
+      {
+        "place_id": "syn-place-1",
+        "name": "Abu Dhabi Police Service Centre (SYNTHETIC)",
+        "address": "Synthetic Street 1, Abu Dhabi",
+        "website": "https://www.adpolice.gov.ae/",
+        "phone": "+971 2 000 0000",
+        "category": "police",
+        "business_status": "OPERATIONAL"
+      },
+      {
+        "place_id": "syn-place-2",
+        "name": "Abu Dhabi Police Fines Payment Office (SYNTHETIC)",
+        "address": "Synthetic Mall, Abu Dhabi",
+        "website": "https://adpolice-fines-pay.example/login",
+        "phone": "+971 900 000042",
+        "category": "government_office",
+        "business_status": "OPERATIONAL"
+      },
+      {
+        "place_id": "syn-place-3",
+        "name": "Sunrise Bakery (SYNTHETIC)",
+        "address": "Synthetic Road 5",
+        "website": null,
+        "phone": null,
+        "category": "bakery",
+        "business_status": "OPERATIONAL"
+      }
+    ],
+    "typing centre visa services dubai": [
+      {
+        "place_id": "syn-place-4",
+        "name": "Quick Visa Typing Centre (SYNTHETIC)",
+        "address": "Synthetic Tower, Dubai",
+        "website": "https://quick-visa-typing.example/",
+        "phone": "+971 4 000 1111",
+        "category": "typing_service",
+        "business_status": "OPERATIONAL"
+      },
+      {
+        "place_id": "syn-place-5",
+        "name": "ICP Visa Amnesty Office (SYNTHETIC)",
+        "address": "Synthetic Plaza, Dubai",
+        "website": "https://icp-amnesty-register.example/apply",
+        "phone": "+44 7000 000001",
+        "category": "government_office",
+        "business_status": "OPERATIONAL"
+      }
+    ],
+    "_default": [
+      {
+        "place_id": "syn-place-6",
+        "name": "Sunrise Bakery (SYNTHETIC)",
+        "address": "Synthetic Road 5",
+        "website": "https://sunrise-bakery.example/",
+        "phone": "+971 4 222 3333",
+        "category": "bakery",
+        "business_status": "OPERATIONAL"
+      }
+    ]
+  }
+}

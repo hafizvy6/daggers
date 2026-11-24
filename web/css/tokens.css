@@ -1,0 +1,104 @@
+/* ============================================================
+   Daggers · Design System — "Neo-Outline Soft" (light only)
+   ★ THE single source of truth. No raw hex outside this file.
+   Consumed by: base.css · layout.css · components.css · js
+   ============================================================ */
+
+:root {
+  /* ---- paper & ink ------------------------------------------------ */
+  --paper:        #FAF7F1;   /* warm cream canvas — never pure white full-bleed */
+  --surface:      #FFFFFF;   /* cards */
+  --ink:          #26262E;   /* text + outlines (soft ink, NOT #000) */
+  --ink-muted:    #6B6B78;   /* secondary text (5.25:1 on surface, 4.91:1 on paper) */
+  --line-soft:    #E7E1D7;   /* dividers only; outlines use --ink */
+
+  /* ---- accent ----------------------------------------------------- */
+  --accent:       #0F766E;   /* calm teal — primary actions, focus (5.47:1 white text) */
+  --accent-tint:  #E3F1EF;
+  --accent-deep:  #0B5A54;   /* pressed / text-on-tint (6.95:1) */
+
+  /* ---- the four tags (base = large text/dots only) ---------------- */
+  --tag-safe:      #2F9E68;  --tag-safe-bg:      #E4F4EB;
+  --tag-warn:      #D8921F;  --tag-warn-bg:      #FBF0DA;
+  --tag-mislead:   #D96F32;  --tag-mislead-bg:   #FBE9DC;
+  --tag-fake:      #D64545;  --tag-fake-bg:      #FBE5E5;
+  /* text-safe variants (≥4.5:1 on their own bg and on paper/surface).
+     Rule: the spec hues above paint dots / bars / 4px rules (≥3:1, non-text);
+     tag TEXT always uses these -ink variants so small type clears 4.5:1. */
+  --tag-safe-ink:    #1F7A4C;  /* 4.67:1 on safe-bg — tag TEXT uses this, spec hue is 2.97:1 */
+  --tag-warn-ink:    #8A5A0B;  /* 5.24:1 on warn-bg  */
+  --tag-mislead-ink: #A34A16;  /* 5.01:1 on mislead-bg */
+  --tag-fake-ink:    #A62B2B;  /* 5.81:1 on fake-bg  */
+  /* neutral / unknown */
+  --tag-unknown:    #6B6B78;  --tag-unknown-bg:  #F1EDE5;
+  --tag-unknown-ink:#55555F;
+
+  /* ---- butter (offline / error banner) ---------------------------- */
+  --butter:       #F6C445;  --butter-tint: #FCF3D7;  --butter-ink: #6B4C05;
+
+  /* ---- structure -------------------------------------------------- */
+  --border:       2px solid var(--ink);
+  --border-soft:  2px solid var(--line-soft);
+  --radius:       4px;
+  --shadow:       3px 3px 0 rgba(38, 38, 46, 0.12);   /* hard offset, ZERO blur */
+  --shadow-lift:  5px 5px 0 rgba(38, 38, 46, 0.16);   /* paper-lift hover     */
+  --shadow-press: 1px 1px 0 rgba(38, 38, 46, 0.10);
+
+  /* ---- spacing scale (4px base) ----------------------------------- */
+  --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px;
+  --s5: 24px; --s6: 32px; --s7: 48px;
+
+  /* ---- type ------------------------------------------------------- */
+  --font-sans: "Plex Sans", "Plex Sans Arabic", system-ui, sans-serif;
+  --font-ar:   "Plex Sans Arabic", "Plex Sans", system-ui, sans-serif;
+  --font-mono: "Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --fs-xs:   0.75rem;   /* 12 · mono labels, chips        */
+  --fs-sm:   0.8125rem; /* 13 · secondary                  */
+  --fs-md:   0.9375rem; /* 15 · body                       */
+  --fs-lg:   1.125rem;  /* 18 · card titles                */
+  --fs-xl:   1.5rem;    /* 24 · screen titles              */
+  --fs-2xl:  2rem;      /* 32 · verdict headline           */
+  --fs-3xl:  2.75rem;   /* 44 · hero tag                   */
+
+  --lh-body: 1.55;  --lh-ar-body: 1.75;
+  --lh-head: 1.25;  --lh-ar-head: 1.35;
+
+  /* ---- motion ----------------------------------------------------- */
+  --dur: 160ms ease-out;
+  --dur-slow: 320ms ease-out;
+
+  /* ---- layout ----------------------------------------------------- */
+  --topbar-h: 60px;
+  --nav-w: 224px;          /* drawer width under 1000px */
+  --content-max: 1180px;
+
+  /* ---- dot grid texture (3% ink) ---------------------------------- */
+  --dot-grid: radial-gradient(rgba(38, 38, 46, 0.03) 1px, transparent 1px);
+}
+
+/* ---------- fonts: self-hosted woff2 only, no CDN ever ------------ */
+@font-face { font-family: "Plex Sans"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("../fonts/plex-sans-400.woff2") format("woff2"); }
+@font-face { font-family: "Plex Sans"; font-style: normal; font-weight: 500; font-display: swap;
+  src: url("../fonts/plex-sans-500.woff2") format("woff2"); }
+@font-face { font-family: "Plex Sans"; font-style: normal; font-weight: 600; font-display: swap;
+  src: url("../fonts/plex-sans-600.woff2") format("woff2"); }
+@font-face { font-family: "Plex Sans"; font-style: normal; font-weight: 700; font-display: swap;
+  src: url("../fonts/plex-sans-700.woff2") format("woff2"); }
+
+@font-face { font-family: "Plex Mono"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("../fonts/plex-mono-400.woff2") format("woff2"); }
+@font-face { font-family: "Plex Mono"; font-style: normal; font-weight: 500; font-display: swap;
+  src: url("../fonts/plex-mono-500.woff2") format("woff2"); }
+@font-face { font-family: "Plex Mono"; font-style: normal; font-weight: 600; font-display: swap;
+  src: url("../fonts/plex-mono-600.woff2") format("woff2"); }
+
+@font-face { font-family: "Plex Sans Arabic"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("../fonts/plex-arabic-400.woff2") format("woff2"); }
+@font-face { font-family: "Plex Sans Arabic"; font-style: normal; font-weight: 500; font-display: swap;
+  src: url("../fonts/plex-arabic-500.woff2") format("woff2"); }
+@font-face { font-family: "Plex Sans Arabic"; font-style: normal; font-weight: 600; font-display: swap;
+  src: url("../fonts/plex-arabic-600.woff2") format("woff2"); }
+@font-face { font-family: "Plex Sans Arabic"; font-style: normal; font-weight: 700; font-display: swap;
+  src: url("../fonts/plex-arabic-700.woff2") format("woff2"); }

@@ -1,0 +1,67 @@
+{
+  "id": 41,
+  "domain": "emiratesnbd-refund.help",
+  "verdict": "MALICIOUS",
+  "score": 0.88,
+  "brand": "Emirates NBD",
+  "reasons": [
+    "brand name 'emiratesnbd' on a non-official domain",
+    "lure keyword 'refund' in the address",
+    "certificate issued 3 hours ago",
+    "94% visual match with emiratesnbd.com refund page",
+    "asks for IBAN and a one-time code"
+  ],
+  "cert_issued": "2026-11-24T07:58:00Z",
+  "first_seen": "2026-11-24T07:58:00Z",
+  "clone": 94,
+  "evidence_url": null,
+  "gallery_match": "emiratesnbd.com/personal/refunds",
+  "source": "crt.sh",
+  "is_case_file": false,
+  "age_min": 190,
+  "cert_age_min": 178,
+  "registrar": "Hostinger operations UAB",
+  "path": "/claim",
+  "verdict_note": "A refund page that copies Emirates NBD and asks for your IBAN and the code your bank texts you.",
+  "scam_type": "fake-banking-login",
+  "signals": [
+    {
+      "label": "Brand name on a non-official domain",
+      "weight": 0.25,
+      "note": "",
+      "label_ar": "اسم العلامة على نطاق غير رسمي"
+    },
+    {
+      "label": "Lure keyword 'refund' in the address",
+      "weight": 0.2,
+      "note": "",
+      "label_ar": "كلمة إغراء في العنوان"
+    },
+    {
+      "label": "Certificate younger than 24 hours",
+      "weight": 0.25,
+      "note": "",
+      "label_ar": "شهادة عمرها أقل من 24 ساعة"
+    },
+    {
+      "label": "Visual clone of the real refund page",
+      "weight": 0.6,
+      "note": "",
+      "label_ar": "نسخة بصرية من صفحة الاسترجاع"
+    },
+    {
+      "label": "Payment-harvest fields (IBAN + OTP)",
+      "weight": 0.25,
+      "note": "",
+      "label_ar": "حقول جمع آيبان + رمز تحقق"
+    }
+  ],
+  "verdict_note_ar": "صفحة استرجاع تقلّد بنك الإمارات دبي الوطني وتطلب رقم الآيبان والرمز الذي يرسله بنكك.",
+  "reasons_ar": [
+    "اسم العلامة «emiratesnbd» على نطاق غير رسمي",
+    "كلمة إغراء «refund» في العنوان",
+    "صدرت الشهادة قبل 3 ساعات",
+    "تطابق بصري 94% مع صفحة الاسترجاع الأصلية",
+    "يطلب رقم الآيبان ورمز التحقق لمرة واحدة"
+  ]
+}

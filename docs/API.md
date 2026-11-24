@@ -1,6 +1,6 @@
-# Daggers — WS1 API Reference
+# Daggers — Integrated API Reference
 
-Interactive OpenAPI is served at `/docs`; the machine schema is at `/openapi.json`. All endpoints below are implemented by Workstream 1 and work with no external network.
+Interactive OpenAPI is served at `/docs`; the machine schema is at `/openapi.json`. WS1 provides the deterministic core contracts; WS2 and WS3 add sweep, Guard sync, portal, and AI routes. The offline demo path works with no external network or API keys.
 
 ## Endpoints
 
@@ -117,3 +117,27 @@ data: {"id":42, ...}
 - Pydantic `422` for invalid `kind`, `lang`, or mode.
 - `limit` is clamped by validation to 1–200.
 - Exact C1/C2/C4/C6 JSON is normalized in `db/repo.py` and `reports/builder.py`; no internal `l1_detail` or normalization fields leak into contracts.
+
+
+## Integrated WS2/WS3 endpoints
+
+| Method | Path | Lane | Response |
+|---|---|---|---|
+| GET | `/` | WS3 | bilingual PWA shell |
+| GET | `/share` | WS3/WS1 seam | PWA `share_target` landing → `#/check` |
+| GET | `/api/examples` | WS3/WS1 seam | demo query/example fixtures |
+| POST | `/api/sweep` | WS2 | `SweepRun` from Search/Maps fixtures |
+| GET | `/api/sweep/{id}` | WS2 | stored `SweepRun` |
+| GET | `/api/guard/blocklist.txt` | WS2 | hosts/domains blocklist from WS1 Guard feed |
+| GET | `/api/guard/sync-status` | WS2 | sync health and honest NextDNS limitations |
+| GET | `/api/reports` | WS3 | `{"reports":[Report...]}` from WS1 SQLite |
+| GET | `/api/reports/{id}` | WS3 | one `Report` |
+| POST | `/api/reports` | WS3 | file report from `finding_id` or `domain` |
+| POST | `/api/reports/{id}/advance` | WS3 | `QUEUED → SUBMITTED → SEEN` |
+| GET | `/api/reports/{id}/export` | WS3 | evidence-pack JSON download |
+| POST | `/api/report/{id}/analysis` | WS3 | SSE `delta` events + `final` EN/AR summary |
+| POST | `/api/report/{id}/takedown` | WS3 | `{letter_en}` takedown draft |
+
+`GET /api/guard/stats` keeps WS1 keys `blocked_domains`, `blocked_hits`, and `mode`, and adds WS3 aliases `blocked_today` and `feed_size`.
+
+The exact WS1 `ScanRequest` remains `{kind,input,lang}`; `kind` is authoritative, not the technical-spec C2 `input_type` wording. WS3's `api.js` has been wired to that shape. AI endpoints receive only canonical `Report.evidence` from the repository and never modify `verdict`, `score`, or `reasons`.

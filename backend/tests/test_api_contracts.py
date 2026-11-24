@@ -145,12 +145,17 @@ def test_sse_heartbeat_and_sweep_event(api_env):
     asyncio.run(collect())
 
 
-def test_optional_routers_are_skipped_without_ws2_ws3(api_env):
+def test_optional_routers_are_mounted_after_integration(api_env):
     _, _, app = api_env
     states = app.state.runtime.optional_routers
-    assert "backend.app.api.sweep" in states
-    assert "backend.app.api.guard" in states
-    assert states["backend.app.api.sweep"].startswith("skipped:")
+    expected = {
+        "backend.app.api.sweep",
+        "backend.app.api.guard",
+        "backend.app.api.reports",
+        "backend.app.api.ai",
+    }
+    assert expected <= set(states)
+    assert all(states[name] == "mounted" for name in expected)
 
 
 def test_fixture_reports_pass_recursive_zero_pii_check(api_env):
@@ -188,26 +193,38 @@ def test_seed_casefiles_are_three_prebuilt_cases(api_env):
     assert {case["id"] for case in cases} == {42, 43, 44}
 
 
-def test_scope_audit_no_ws2_ws3_or_redundant_files():
+def test_integration_scope_audit_ws2_ws3_present_without_duplicate_roots():
     root = Path(__file__).resolve().parents[2]
-    forbidden = [
-        "web",
-        "guard",
-        "channels",
-        "extension",
-        "backend/app/ai",
+    required = [
+        "web/index.html",
+        "web/js/api.js",
+        "web/js/i18n/en.json",
+        "web/js/i18n/ar.json",
+        "guard/README.md",
+        "extension/manifest.json",
+        "backend/app/channels",
         "backend/app/api/sweep.py",
         "backend/app/api/guard.py",
+        "backend/app/ai/client.py",
         "backend/app/api/reports.py",
         "backend/app/api/ai.py",
-        "ops",
+        "ops/demo",
+        "docs/UI-KIT.md",
+    ]
+    assert all((root / path).exists() for path in required)
+    forbidden = [
+        "daggers",
+        "daggers-ws2-mohamed",
+        "backend/app/server.py",
+        "backend/app/store.py",
+        "backend/requirements.txt",
         "requirements-render.txt",
         "pytest.ini",
-        "docs/UI-KIT.md",
     ]
     assert not any((root / path).exists() for path in forbidden)
     assert not list((root / "docs").glob("daggers-*.md"))
     assert "backend/data/" in (root / ".gitignore").read_text(encoding="utf-8")
+
 
 
 def test_enricher_failure_returns_complete_s5_shape(monkeypatch, tmp_path):
@@ -342,3 +359,67 @@ def test_seed_only_uses_committed_gallery_index_without_generating_jpgs(monkeypa
     assert result["gallery"] == 60
     assert (tmp_path / "gallery" / "gallery_index.json").exists()
     assert not list((tmp_path / "gallery").glob("*.jpg"))
+
+
+def test_integrated_app_serves_ws3_shell_and_share_target(api_env):
+    client, _, _ = api_env
+    root = client.get("/")
+    assert root.status_code == 200
+    assert "text/html" in root.headers["content-type"]
+    assert client.get("/share").status_code == 200
+    examples = client.get("/api/examples")
+    assert examples.status_code == 200
+    assert "sweep_web" in examples.json()
+
+
+def test_integrated_guard_stats_keeps_ws1_and_ws3_keys(api_env):
+    client, _, _ = api_env
+    stats = client.get("/api/guard/stats").json()
+    assert {
+        "blocked_domains",
+        "blocked_hits",
+        "blocked_today",
+        "feed_size",
+        "mode",
+    } <= set(stats)
+
+
+def test_ws2_sweep_routes_use_ws1_sqlite_store(api_env):
+    client, _, _ = api_env
+    created = client.post("/api/sweep", json={"channel": "web", "lang": "en"})
+    assert created.status_code == 200
+    run = created.json()
+    assert {
+        "id", "query", "lang", "channel", "engine", "cached", "results", "store"
+    } <= set(run)
+    assert run["store"] == "sqlite"
+    fetched = client.get(f"/api/sweep/{run['id']}")
+    assert fetched.status_code == 200
+    assert fetched.json()["id"] == run["id"]
+    blocklist = client.get("/api/guard/blocklist.txt")
+    assert blocklist.status_code == 200
+    assert "0.0.0.0" in blocklist.text
+    sync = client.get("/api/guard/sync-status")
+    assert sync.status_code == 200
+    assert sync.json()["source"] == "ws1_guard_feed"
+
+
+def test_ws3_reports_and_ai_routes_use_ws1_repository(api_env):
+    client, _, _ = api_env
+    reports = client.get("/api/reports")
+    assert reports.status_code == 200
+    assert reports.json()["reports"]
+    filed = client.post("/api/reports", json={"finding_id": 42})
+    assert filed.status_code in (200, 201)
+    assert filed.json()["finding_id"] == 42
+    report_id = filed.json()["id"]
+    advanced = client.post(f"/api/reports/{report_id}/advance", json={"status": "SEEN"})
+    assert advanced.status_code == 200
+    assert advanced.json()["status"] == "SEEN"
+    analysis = client.post(f"/api/report/{report_id}/analysis")
+    assert analysis.status_code == 200
+    assert "event: final" in analysis.text
+    assert "summary_en" in analysis.text
+    takedown = client.post(f"/api/report/{report_id}/takedown")
+    assert takedown.status_code == 200
+    assert "letter_en" in takedown.json()

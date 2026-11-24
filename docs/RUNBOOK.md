@@ -46,13 +46,32 @@ python3 -m backend.seed.seed --seed-only   # or simply start the app; it seeds a
 | Stream | `curl -N http://localhost:8000/api/stream` | heartbeat + finding events |
 | Tests | `make test` | all green |
 
-## Start order for all three lanes
+## Integrated start order
 
-1. WS1: `make seed && make demo` and verify `/api/status`.
-2. WS2: confirm `/api/guard/feed`, then point Guard sync and extension API base at this origin.
-3. WS3: set `CORS_ORIGINS` to the exact Pages origin, mount `web/`, then exercise `/api/scan`, `/api/feed`, and optional report/AI routes.
-4. Full smoke: scan → finding → evidence → report → AI → portal, all from fixtures.
-5. Freeze: `make check`, `make snapshot`, and copy the snapshot to the second laptop/USB.
+1. Pull the integration branch, then run `make bootstrap` once. It recreates `.venv` with the pinned lightweight deps.
+2. `make clean && make seed` — cold SQLite WAL, committed 60-entry gallery index, and four readable evidence JPGs.
+3. `make check` — compile all three lanes and run the 199-check suite.
+4. `make demo` — one FastAPI process on `:8000`: WS1 brain/API, WS2 sweep/Guard, and WS3 PWA/portal/AI.
+5. Open `http://localhost:8000/?mode=demo#/feed` for the offline UI story and `http://localhost:8000/docs` for OpenAPI.
+6. Verify the joins:
+
+   ```bash
+   curl -s http://localhost:8000/api/status
+   curl -s 'http://localhost:8000/api/feed?limit=5'
+   curl -s -X POST http://localhost:8000/api/sweep -H 'Content-Type: application/json' \
+     -d '{"channel":"web"}'
+   curl -s http://localhost:8000/api/guard/blocklist.txt
+   curl -s http://localhost:8000/api/reports
+   curl -s -X POST http://localhost:8000/api/report/7/analysis
+   curl -s -o /dev/null -w '%{http_code}
+' http://localhost:8000/
+   curl -s -o /dev/null -w '%{http_code}
+' http://localhost:8000/share
+   ```
+
+7. Full demo story: Checker → Finding/evidence → Portal report → AI summary/takedown → Sweep → Guard → Number, all from fixtures if the network is off.
+8. Freeze: `make check`, `make snapshot`, and copy the snapshot to the second laptop/USB.
+
 
 ## External adapter switches
 

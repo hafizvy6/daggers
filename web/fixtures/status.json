@@ -1,0 +1,16 @@
+{
+  "mode": "live",
+  "heartbeats": {
+    "crt_poller": 38,
+    "pipeline": 3,
+    "vision": 54,
+    "guard_sync": 71
+  },
+  "counts": {
+    "domains": 18422,
+    "findings": 12,
+    "reports": 7,
+    "blocked_today": 1243
+  },
+  "uptime_s": 53211
+}

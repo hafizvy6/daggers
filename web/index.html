@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Daggers — SCAMSHIELD</title>
+  <meta name="description" content="Daggers protects people from scam websites, messages, and numbers — and reports confirmed scams to Abu Dhabi Police with the evidence attached.">
+  <meta name="theme-color" content="#0F766E">
+  <meta name="color-scheme" content="light">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" href="./icons/icon-192.png" sizes="192x192">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Daggers">
+  <link rel="stylesheet" href="./css/tokens.css">
+  <link rel="stylesheet" href="./css/base.css">
+  <link rel="stylesheet" href="./css/layout.css">
+  <link rel="stylesheet" href="./css/components.css">
+  <script src="./config.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main" data-i18n="common.skipToContent">Skip to content</a>
+
+  <header class="topbar">
+    <button class="icon-btn menu-btn" id="menuBtn" data-i18n-aria="common.menu" aria-label="Menu" aria-controls="nav" aria-expanded="false">
+      <span data-icon="menu"></span>
+    </button>
+    <a class="brand" href="#/feed" aria-label="Daggers">
+      <span id="brandMark" aria-hidden="true"></span>
+      <span class="brand-name" data-i18n="common.appName">Daggers</span>
+      <span class="brand-sub" id="brandSub">SCAMSHIELD</span>
+    </a>
+    <span class="topbar-spacer"></span>
+    <div class="topbar-cluster">
+      <span class="heartbeat" id="heartbeat" title="live">
+        <span class="dot" aria-hidden="true"></span>
+        <span class="hb-label mono" id="hbLabel">live</span>
+      </span>
+      <div class="seg" id="modeToggle" role="group" data-i18n-aria="top.modeLive" aria-label="Mode">
+        <button type="button" data-mode="live" aria-pressed="true">LIVE</button>
+        <button type="button" data-mode="demo" aria-pressed="false">DEMO</button>
+      </div>
+      <div class="lang-switch" id="langSwitch" role="group" data-i18n-aria="top.switchLang" aria-label="Language">
+        <button type="button" data-lang="en" aria-pressed="true">EN</button>
+        <button type="button" data-lang="ar" aria-pressed="false" lang="ar">ع</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="banner" id="banner" role="status">
+    <span class="banner-tag" id="bannerTag">OFFLINE</span>
+    <span id="bannerText"></span>
+  </div>
+
+  <nav class="nav" id="nav" data-i18n-aria="common.menu" aria-label="Main">
+    <span class="nav-group-label" data-i18n="nav.groupWatch">Watch &amp; check</span>
+    <a class="nav-link" href="#/feed" data-nav="feed"><span data-icon="radar"></span><span data-i18n="nav.feed">Radar feed</span></a>
+    <a class="nav-link" href="#/sweep" data-nav="sweep"><span data-icon="sweep"></span><span data-i18n="nav.sweep">Sweep</span></a>
+    <a class="nav-link" href="#/check" data-nav="check"><span data-icon="check"></span><span data-i18n="nav.check">Checker</span></a>
+    <a class="nav-link" href="#/number" data-nav="number"><span data-icon="phone"></span><span data-i18n="nav.number">Numbers</span></a>
+    <span class="nav-group-label" data-i18n="nav.groupPolice">Police</span>
+    <a class="nav-link" href="#/portal" data-nav="portal"><span data-icon="portal"></span><span data-i18n="nav.portal">Portal</span><span class="nav-badge" id="navReportCount" hidden></span></a>
+    <span class="nav-group-label" data-i18n="nav.groupGuard">Guard</span>
+    <a class="nav-link" href="#/guard" data-nav="guard"><span data-icon="finger"></span><span data-i18n="nav.guard">The Guard</span></a>
+  </nav>
+  <div class="nav-scrim" id="navScrim"></div>
+
+  <main class="main" id="main" tabindex="-1">
+    <noscript><div class="card"><h1>Daggers</h1><p>Please enable JavaScript — the Daggers console is a small app that runs in your browser.</p></div></noscript>
+    <div id="view" aria-live="polite"></div>
+  </main>
+
+  <script type="module">
+    import { boot } from "./js/app.js";
+    boot().catch((err) => {
+      console.error(err);
+      const v = document.getElementById("view");
+      if (v) v.innerHTML = `<div class="card"><h1>Daggers</h1><p>The app didn't start. Reload the page to try again.</p></div>`;
+    });
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.js").catch(() => { /* fine without SW */ });
+      });
+    }
+  </script>
+</body>
+</html>
