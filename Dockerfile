@@ -22,8 +22,8 @@ RUN if [ "$INSTALL_RENDER" = "1" ]; then \
         pip install --no-cache-dir \
           imagehash==4.3.2 \
           numpy==2.1.3 \
-          opencv-python-headless==4.10.0.84 \
-          playwright==1.49.1 \
+          opencv-python-headless==5.1.0.95 \
+          playwright==1.65.2 \
           pytesseract==0.3.13 && \
         python -m playwright install --with-deps chromium; \
     fi

@@ -5,6 +5,7 @@
 ```bash
 git status --short
 make bootstrap
+make clean           # optional: clear a partially seeded DB/assets after a failed older run
 make seed
 make demo
 # second terminal
@@ -14,6 +15,8 @@ curl -s http://localhost:8000/api/guard/feed
 ```
 
 Expected: `mode=demo`, non-negative heartbeat ages, 6 findings, 4 evidence JPGs, and 3 malicious Guard rows.
+
+`make bootstrap` prefers Python 3.11–3.14 and recreates `.venv`. On macOS Python 3.15, the pinned `Pillow==12.3.0` wheel avoids source-building against Homebrew FreeType. `make seed` uses the committed 60-entry gallery index and does not regenerate gallery JPGs.
 
 For live SQLite tables with external adapters still off:
 
@@ -77,6 +80,7 @@ Custom UA is `Daggers-Research/1.0`. Every adapter uses a timeout and returns an
 |---|---|
 | Venue network down | `make demo`; all REST/SSE/evidence/report shapes survive from fixtures. |
 | Playwright/Chromium missing | Leave `RENDER_ENABLED=0`; committed side-by-side JPEGs are served. |
+| macOS Python 3.15 + `Pillow` `libhvf.dylib` error | Pull the current branch, delete `.venv`, rerun `make bootstrap`; `Pillow==12.3.0` has a cp315 wheel. No manual FreeType/Homebrew fix is needed. |
 | HF Space disk reset | Startup detects missing DB and runs seed-on-boot. |
 | AI provider/key unavailable | `AI_STATE=template`; WS3 uses the same structured summary shape. |
 | crt.sh rate-limit or outage | `CRT_ENABLED=0`; replay fixture findings through SSE. |

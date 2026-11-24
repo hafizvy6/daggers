@@ -14,11 +14,15 @@ One brain powers every surface. A URL, pasted message, phone number, search resu
 
 ## Quickstart (<60 seconds cold)
 
+Prerequisite: **Python 3.11+**. `make bootstrap` prefers `python3.11`–`python3.14` when available, deletes any stale `.venv`, and installs pinned wheels; Python 3.15 is also supported by the pinned `Pillow==12.3.0` wheel.
+
 ```bash
 make bootstrap       # creates .venv and installs pinned lightweight deps
-make seed            # SQLite WAL + 60 gallery refs + 4 readable evidence JPGs
+make seed            # SQLite WAL + committed 60-entry gallery index + 4 readable evidence JPGs
 make demo            # DEMO_MODE=1, fully alive offline on :8000
 ```
+
+If an older checkout created a Python 3.15 venv with `Pillow==11.0.0`, simply rerun `make bootstrap` after pulling; it recreates the venv. No manual `libhvf.dylib` or Homebrew FreeType fix is needed.
 
 Then:
 
@@ -195,7 +199,7 @@ make test
 # or: .venv/bin/python -m pytest backend/tests -q
 ```
 
-The **89-check** suite covers scorer weights and thresholds, a 24-case golden accuracy matrix, claim-only `MISLEADING` capping, IDN/confusable homographs, official-domain allowlisting, EN/AR/Arabizi claims, offline number patterns, exact API schemas, JSONL Guard feed, configurable misleading-block policy, evidence JPEGs, seed-on-boot, SSE runtime, graceful enrichment-failure shape, zero-PII report validation, and a file-level WS2/WS3 scope audit.
+The **93-check** suite covers scorer weights and thresholds, a 24-case golden accuracy matrix, claim-only `MISLEADING` capping, IDN/confusable homographs, official-domain allowlisting, EN/AR/Arabizi claims, offline number patterns, exact API schemas, JSONL Guard feed, configurable misleading-block policy, evidence JPEGs, seed-on-boot, SSE runtime, graceful enrichment-failure shape, zero-PII report validation, FreeType/font fallbacks, committed-gallery seed behavior, and a file-level WS2/WS3 scope audit.
 
 Definition of Done verified here: `make seed && make demo` cold start; `/api/status`; C1/C2/C4/C6 shapes; `аmazon.ae`; 200-number seed; readable evidence JPG; zero-PII validation; seed-on-boot by deleting `backend/data`; Docker render-disabled fallback. `make test` suppresses a harmless Starlette/AnyIO deprecation warning from the installed test client; no application warnings or errors are emitted.
 

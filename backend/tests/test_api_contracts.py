@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 from pathlib import Path
 
 from backend.app.reports.builder import validate_zero_pii
@@ -247,3 +248,97 @@ def test_enricher_failure_returns_complete_s5_shape(monkeypatch, tmp_path):
         "cert_age_hours",
     }
     assert result["dns_a"] == []
+
+
+def test_font_loader_falls_back_when_freetype_is_broken(monkeypatch):
+    from backend.app.vision import gallery
+
+    class BrokenFontModule:
+        @staticmethod
+        def truetype(*args, **kwargs):
+            raise ImportError("dlopen libhvf.dylib failed")
+
+        @staticmethod
+        def load_default(size=None):
+            if size is not None:
+                raise ImportError("dlopen libhvf.dylib failed")
+            return "bitmap-font"
+
+    monkeypatch.setattr(gallery, "ImageFont", BrokenFontModule)
+    monkeypatch.setattr(gallery, "FONT_CANDIDATES", ())
+    assert gallery.load_font(26, bold=True) == "bitmap-font"
+
+    class AlwaysBrokenFontModule(BrokenFontModule):
+        @staticmethod
+        def load_default(size=None):
+            raise ImportError("dlopen libhvf.dylib failed")
+
+    monkeypatch.setattr(gallery, "ImageFont", AlwaysBrokenFontModule)
+    assert gallery.load_font(26, bold=True) is None
+
+
+def test_gallery_generation_falls_back_to_committed_index(monkeypatch, tmp_path):
+    from backend.app.vision import gallery
+
+    committed = Path(__file__).resolve().parents[1] / "seed" / "gallery_index.json"
+    runtime_index = tmp_path / "gallery_index.json"
+    runtime_index.write_text(committed.read_text(encoding="utf-8"), encoding="utf-8")
+
+    def broken_reference(*args, **kwargs):
+        raise ImportError("dlopen libhvf.dylib failed")
+
+    monkeypatch.setattr(gallery, "create_official_reference", broken_reference)
+    entries = gallery.generate_gallery_images(
+        [{"token": "adcb", "official_domain": "adcb.ae"}],
+        tmp_path / "images",
+        runtime_index,
+        count=1,
+    )
+    assert len(entries) == 60
+    assert not list((tmp_path / "images").glob("*.jpg"))
+
+
+def test_evidence_generation_falls_back_to_bundled_jpeg(monkeypatch, tmp_path):
+    from backend.app.vision import diff, gallery
+
+    def broken_reference(*args, **kwargs):
+        raise ImportError("dlopen libhvf.dylib failed")
+
+    monkeypatch.setattr(gallery, "create_official_reference", broken_reference)
+    finding = {
+        "id": 42,
+        "domain": "adcb-secure-login.xyz",
+        "verdict": "MALICIOUS",
+        "score": 0.93,
+        "reasons": ["visual clone 97% match to adcb.ae/login"],
+        "gallery_match": "adcb.ae/login",
+    }
+    destination = tmp_path / "42.jpg"
+    result = diff.ensure_evidence_image(finding, destination, tmp_path / "gallery")
+    assert result == destination
+    assert result.read_bytes()[:2] == b"\xff\xd8"
+
+
+def test_seed_only_uses_committed_gallery_index_without_generating_jpgs(monkeypatch, tmp_path, capsys):
+    from backend.seed import seed as seed_module
+
+    seed_dir = Path(__file__).resolve().parents[1] / "seed"
+    monkeypatch.setenv("MODE", "demo")
+    monkeypatch.setenv("DEMO_MODE", "1")
+    monkeypatch.setenv("DB_PATH", str(tmp_path / "daggers.db"))
+    monkeypatch.setenv("EVIDENCE_DIR", str(tmp_path / "evidence"))
+    monkeypatch.setenv("GALLERY_DIR", str(tmp_path / "gallery"))
+    monkeypatch.setenv("SEED_DIR", str(seed_dir))
+    monkeypatch.setenv("WEB_DIR", str(tmp_path / "web"))
+    monkeypatch.setenv("CORS_ORIGINS", "")
+    monkeypatch.setattr(sys, "argv", ["seed.py", "--seed-only"])
+
+    def forbidden_gallery_generation(*args, **kwargs):
+        raise AssertionError("--seed-only must not regenerate gallery images")
+
+    monkeypatch.setattr(seed_module, "generate_gallery_images", forbidden_gallery_generation)
+    seed_module.main()
+    result = json.loads(capsys.readouterr().out.strip())
+    assert result["gallery"] == 60
+    assert (tmp_path / "gallery" / "gallery_index.json").exists()
+    assert not list((tmp_path / "gallery").glob("*.jpg"))
