@@ -1,7 +1,7 @@
 """Sweep service: run default (or opted-in arbitrary) queries over web/maps channels.
 
 Abuse protections:
-  * default queries only, from ``queries.yaml``; arbitrary text requires SWEEP_ALLOW_ARBITRARY=1
+  * canonical queries from ``queries.yaml``; free text allowed by default (set SWEEP_ALLOW_ARBITRARY=0 to disable)
   * arbitrary queries are length-capped and refused if they contain personal data
   * per-client sliding-window rate limit + global concurrency cap
   * result titles/snippets are PII-redacted before storage
