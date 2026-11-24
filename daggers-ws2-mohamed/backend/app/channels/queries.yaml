@@ -1,0 +1,10 @@
+# Default Sweep queries (WS2). Arbitrary queries require SWEEP_ALLOW_ARBITRARY=1.
+# Queries must never contain personal data; the Sweep API refuses them if they do.
+version: 1
+queries:
+  - {id: web-adpolice-fines, channel: web, lang: en, query: "pay abu dhabi police traffic fines online"}
+  - {id: web-visa-amnesty, channel: web, lang: en, query: "uae visa amnesty registration"}
+  - {id: web-national-day-giveaway, channel: web, lang: en, query: "uae national day giveaway 1 million dirhams"}
+  - {id: web-ar-fines, channel: web, lang: ar, query: "دفع مخالفات شرطة أبوظبي"}
+  - {id: maps-police-centre, channel: maps, lang: en, query: "police service centre abu dhabi"}
+  - {id: maps-typing-centre, channel: maps, lang: en, query: "typing centre visa services dubai"}

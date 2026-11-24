@@ -1,0 +1,349 @@
+# SYNTHETIC TEST FIXTURE — fabricated entities on .example domains. Never load in production.
+schema_version: 1
+registry_name: SYNTHETIC TEST FIXTURE registry
+entries:
+- id: syn-police
+  organization: Synthetic Police
+  aliases:
+    en:
+    - Synthetic Police
+    ar:
+    - شرطة المثال
+    translit: []
+  domains:
+  - police.gov.example
+  subdomain_policy: listed
+  allowed_subdomains:
+  - www
+  source_class: A
+  jurisdiction: synthetic
+  authority_scope:
+  - police_warning
+  - traffic
+  categories:
+  - police_warning
+  - traffic
+  languages:
+  - en
+  - ar
+  source_urls:
+  - url: https://police.gov.example/news
+    kind: html
+    terms_reviewed: true
+  provenance: SYNTHETIC TEST FIXTURE — fabricated entity for automated tests; not a real UAE authority
+  status: approved
+  reviewer: SYNTHETIC-TEST-REVIEWER
+  verified_at: '2026-11-01T00:00:00Z'
+  max_age_days: 180
+  synthetic: true
+- id: syn-residency
+  organization: Synthetic Residency Authority
+  aliases:
+    en:
+    - Synthetic Residency Authority
+    - SIRA
+    ar:
+    - هيئة الإقامة التجريبية
+    translit: []
+  domains:
+  - sira.gov.example
+  subdomain_policy: listed
+  allowed_subdomains:
+  - www
+  source_class: A
+  jurisdiction: synthetic
+  authority_scope:
+  - immigration
+  - fees
+  categories:
+  - immigration
+  - fees
+  languages:
+  - en
+  - ar
+  source_urls:
+  - url: https://sira.gov.example/news
+    kind: html
+    terms_reviewed: true
+  provenance: SYNTHETIC TEST FIXTURE — fabricated entity for automated tests; not a real UAE authority
+  status: approved
+  reviewer: SYNTHETIC-TEST-REVIEWER
+  verified_at: '2026-11-01T00:00:00Z'
+  max_age_days: 180
+  synthetic: true
+- id: syn-social
+  organization: Synthetic Ministry of Social Support
+  aliases:
+    en:
+    - Synthetic Ministry of Social Support
+    - MOSS
+    ar:
+    - وزارة الدعم الاجتماعي التجريبية
+    translit: []
+  domains:
+  - moss.gov.example
+  subdomain_policy: exact
+  source_class: A
+  jurisdiction: synthetic
+  authority_scope:
+  - financial_aid
+  - giveaway
+  categories:
+  - financial_aid
+  - giveaway
+  languages:
+  - en
+  - ar
+  source_urls:
+  - url: https://moss.gov.example/news
+    kind: html
+    terms_reviewed: true
+  provenance: SYNTHETIC TEST FIXTURE — fabricated entity for automated tests; not a real UAE authority
+  status: approved
+  reviewer: SYNTHETIC-TEST-REVIEWER
+  verified_at: '2026-11-01T00:00:00Z'
+  max_age_days: 180
+  synthetic: true
+- id: syn-housing
+  organization: Synthetic Housing Programme
+  aliases:
+    en:
+    - Synthetic Housing Programme
+    ar:
+    - برنامج الإسكان التجريبي
+    translit: []
+  domains:
+  - housing.gov.example
+  subdomain_policy: exact
+  source_class: A
+  jurisdiction: synthetic
+  authority_scope:
+  - financial_aid
+  categories:
+  - financial_aid
+  languages:
+  - en
+  - ar
+  source_urls:
+  - url: https://housing.gov.example/news
+    kind: html
+    terms_reviewed: true
+  provenance: SYNTHETIC TEST FIXTURE — fabricated entity for automated tests; not a real UAE authority
+  status: approved
+  reviewer: SYNTHETIC-TEST-REVIEWER
+  verified_at: '2026-11-01T00:00:00Z'
+  max_age_days: 180
+  synthetic: true
+- id: syn-transport
+  organization: Synthetic Transport Authority
+  aliases:
+    en:
+    - Synthetic Transport Authority
+    - STA
+    ar:
+    - هيئة النقل التجريبية
+    translit: []
+  domains:
+  - sta.gov.example
+  subdomain_policy: exact
+  source_class: A
+  jurisdiction: synthetic
+  authority_scope:
+  - fees
+  - traffic
+  categories:
+  - fees
+  - traffic
+  languages:
+  - en
+  - ar
+  source_urls:
+  - url: https://sta.gov.example/news
+    kind: html
+    terms_reviewed: true
+  provenance: SYNTHETIC TEST FIXTURE — fabricated entity for automated tests; not a real UAE authority
+  status: approved
+  reviewer: SYNTHETIC-TEST-REVIEWER
+  verified_at: '2026-11-01T00:00:00Z'
+  max_age_days: 180
+  synthetic: true
+- id: syn-portal
+  organization: Synthetic Government Portal
+  aliases:
+    en:
+    - Synthetic Government Portal
+    ar:
+    - البوابة الحكومية التجريبية
+    translit: []
+  domains:
+  - portal.gov.example
+  subdomain_policy: listed
+  allowed_subdomains:
+  - www
+  - forum
+  source_class: A
+  jurisdiction: synthetic
+  authority_scope:
+  - announcement
+  categories:
+  - announcement
+  languages:
+  - en
+  - ar
+  source_urls:
+  - url: https://portal.gov.example/news
+    kind: html
+    terms_reviewed: true
+  provenance: SYNTHETIC TEST FIXTURE — fabricated entity for automated tests; not a real UAE authority
+  status: approved
+  reviewer: SYNTHETIC-TEST-REVIEWER
+  verified_at: '2026-11-01T00:00:00Z'
+  max_age_days: 180
+  synthetic: true
+- id: syn-news-agency
+  organization: Synthetic News Agency
+  aliases:
+    en:
+    - Synthetic News Agency
+    - SNA
+    ar:
+    - وكالة الأنباء التجريبية
+    translit: []
+  domains:
+  - news.gov.example
+  subdomain_policy: exact
+  source_class: B
+  jurisdiction: synthetic
+  authority_scope: []
+  categories:
+  - announcement
+  languages:
+  - en
+  - ar
+  source_urls:
+  - url: https://news.gov.example/news
+    kind: html
+    terms_reviewed: true
+  provenance: SYNTHETIC TEST FIXTURE — fabricated entity for automated tests; not a real UAE authority
+  status: approved
+  reviewer: SYNTHETIC-TEST-REVIEWER
+  verified_at: '2026-11-01T00:00:00Z'
+  max_age_days: 180
+  synthetic: true
+- id: syn-daily
+  organization: Synthetic Daily
+  aliases:
+    en:
+    - Synthetic Daily
+    ar:
+    - الصحيفة التجريبية
+    translit: []
+  domains:
+  - syntheticdaily.example
+  subdomain_policy: exact
+  source_class: C
+  jurisdiction: synthetic
+  authority_scope: []
+  categories:
+  - announcement
+  languages:
+  - en
+  - ar
+  source_urls:
+  - url: https://syntheticdaily.example/news
+    kind: html
+    terms_reviewed: true
+  provenance: SYNTHETIC TEST FIXTURE — fabricated entity for automated tests; not a real UAE authority
+  status: approved
+  reviewer: SYNTHETIC-TEST-REVIEWER
+  verified_at: '2026-11-01T00:00:00Z'
+  max_age_days: 180
+  synthetic: true
+- id: syn-pending
+  organization: Synthetic Pending Authority
+  aliases:
+    en:
+    - Synthetic Pending Authority
+    ar: []
+    translit: []
+  domains:
+  - pending.gov.example
+  subdomain_policy: exact
+  source_class: A
+  jurisdiction: synthetic
+  authority_scope:
+  - fees
+  categories:
+  - fees
+  languages:
+  - en
+  - ar
+  source_urls:
+  - url: https://pending.gov.example/news
+    kind: html
+    terms_reviewed: true
+  provenance: SYNTHETIC TEST FIXTURE — fabricated entity for automated tests; not a real UAE authority
+  status: pending
+  reviewer: null
+  verified_at: null
+  max_age_days: 180
+  synthetic: true
+- id: syn-revoked
+  organization: Synthetic Revoked Authority
+  aliases:
+    en:
+    - Synthetic Revoked Authority
+    ar: []
+    translit: []
+  domains:
+  - revoked.gov.example
+  subdomain_policy: exact
+  source_class: A
+  jurisdiction: synthetic
+  authority_scope:
+  - fees
+  categories:
+  - fees
+  languages:
+  - en
+  - ar
+  source_urls:
+  - url: https://revoked.gov.example/news
+    kind: html
+    terms_reviewed: true
+  provenance: SYNTHETIC TEST FIXTURE — fabricated entity for automated tests; not a real UAE authority
+  status: revoked
+  reviewer: SYNTHETIC-TEST-REVIEWER
+  verified_at: '2026-11-01T00:00:00Z'
+  max_age_days: 180
+  synthetic: true
+  revoked_reason: 'SYNTHETIC: domain transferred'
+- id: syn-expired
+  organization: Synthetic Expired Authority
+  aliases:
+    en:
+    - Synthetic Expired Authority
+    ar: []
+    translit: []
+  domains:
+  - expired.gov.example
+  subdomain_policy: exact
+  source_class: A
+  jurisdiction: synthetic
+  authority_scope:
+  - fees
+  categories:
+  - fees
+  languages:
+  - en
+  - ar
+  source_urls:
+  - url: https://expired.gov.example/news
+    kind: html
+    terms_reviewed: true
+  provenance: SYNTHETIC TEST FIXTURE — fabricated entity for automated tests; not a real UAE authority
+  status: approved
+  reviewer: SYNTHETIC-TEST-REVIEWER
+  verified_at: '2025-01-01T00:00:00Z'
+  max_age_days: 180
+  synthetic: true

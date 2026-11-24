@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Daggers Shield (unofficial prototype)",
+  "short_name": "Daggers Shield",
+  "version": "0.2.0",
+  "description": "Labels Google search results SAFE / WARNING / MISLEADING / FAKE using the Daggers backend. Not an official UAE Police or government product.",
+  "minimum_chrome_version": "110",
+  "permissions": ["storage"],
+  "host_permissions": ["http://localhost/*", "http://127.0.0.1/*"],
+  "optional_host_permissions": ["https://*/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["https://www.google.com/search*", "https://www.google.ae/search*"],
+      "js": ["lib/core.js", "content/tagger.js"],
+      "css": ["styles/tags.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": { "default_popup": "popup/popup.html", "default_title": "Daggers Shield" },
+  "icons": { "16": "icons/icon16.png", "48": "icons/icon48.png", "128": "icons/icon128.png" }
+}

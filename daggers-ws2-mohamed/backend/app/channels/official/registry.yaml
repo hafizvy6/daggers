@@ -1,0 +1,481 @@
+# Daggers WS2 — official UAE source registry.
+# Every entry starts as `pending`. Only a human reviewer can approve one:
+#   python -m backend.app.channels.official.cli approve <id> --reviewer NAME
+# Do not hand-edit `status`, `reviewer`, or `verified_at`.
+schema_version: 1
+registry_name: daggers-official-uae
+discovery_index_urls:
+- https://u.ae/en/Help/The-Government
+- https://u.ae/en/resources/useful-links
+discovery_note: Directory pages are a DISCOVERY index only. Parsed candidates are added as pending; the
+  live page structure has not been validated by WS2.
+entries:
+- id: uae-gov-portal
+  organization: UAE Government Portal (U.ae)
+  aliases:
+    en:
+    - U.ae
+    - UAE Government Portal
+    - official portal of the UAE Government
+    ar:
+    - البوابة الرسمية لحكومة الإمارات
+    translit:
+    - u ae
+  domains:
+  - u.ae
+  subdomain_policy: exact
+  source_class: A
+  jurisdiction: federal
+  authority_scope:
+  - announcement
+  categories:
+  - announcement
+  - immigration
+  - fees
+  - financial_aid
+  languages:
+  - en
+  - ar
+  source_urls:
+  - url: https://u.ae/en
+    kind: html
+    terms_reviewed: false
+  provenance: 'candidate: named in the WS2 implementation brief; not yet verified by a human reviewer'
+  status: pending
+  reviewer: null
+  verified_at: null
+  max_age_days: 180
+- id: uae-pass
+  organization: UAE PASS
+  aliases:
+    en:
+    - UAE PASS
+    - UAEPASS
+    ar:
+    - الهوية الرقمية
+    - يو إيه إي باس
+    translit:
+    - uae pass
+  domains:
+  - uaepass.ae
+  subdomain_policy: exact
+  source_class: A
+  jurisdiction: federal
+  authority_scope: []
+  categories:
+  - announcement
+  languages:
+  - en
+  - ar
+  source_urls:
+  - url: https://uaepass.ae/
+    kind: html
+    terms_reviewed: false
+  provenance: 'candidate: named in the WS2 implementation brief; not yet verified by a human reviewer;
+    also in brands.yaml'
+  status: pending
+  reviewer: null
+  verified_at: null
+  max_age_days: 180
+  brand_token: uaepass
+- id: abu-dhabi-police
+  organization: Abu Dhabi Police
+  aliases:
+    en:
+    - Abu Dhabi Police
+    - AD Police
+    ar:
+    - شرطة أبوظبي
+    - شرطة ابوظبي
+    translit:
+    - shurtat abu dhabi
+  domains:
+  - adpolice.gov.ae
+  subdomain_policy: listed
+  allowed_subdomains:
+  - www
+  source_class: A
+  jurisdiction: abu_dhabi
+  authority_scope:
+  - police_warning
+  - traffic
+  categories:
+  - police_warning
+  - traffic
+  - announcement
+  languages:
+  - en
+  - ar
+  source_urls:
+  - url: https://www.adpolice.gov.ae/
+    kind: html
+    terms_reviewed: false
+  provenance: 'candidate: government-type entry in backend/app/core/brands.yaml (read-only); not yet verified
+    by a human reviewer'
+  status: pending
+  reviewer: null
+  verified_at: null
+  max_age_days: 180
+  brand_token: abudhabipolice
+- id: dubai-police
+  organization: Dubai Police
+  aliases:
+    en:
+    - Dubai Police
+    ar:
+    - شرطة دبي
+    translit:
+    - shurtat dubai
+  domains:
+  - dubaipolice.gov.ae
+  subdomain_policy: listed
+  allowed_subdomains:
+  - www
+  source_class: A
+  jurisdiction: dubai
+  authority_scope:
+  - police_warning
+  - traffic
+  categories:
+  - police_warning
+  - traffic
+  - announcement
+  languages:
+  - en
+  - ar
+  source_urls:
+  - url: https://www.dubaipolice.gov.ae/
+    kind: html
+    terms_reviewed: false
+  provenance: 'candidate: government-type entry in backend/app/core/brands.yaml (read-only); not yet verified
+    by a human reviewer'
+  status: pending
+  reviewer: null
+  verified_at: null
+  max_age_days: 180
+  brand_token: dubaipolice
+- id: icp
+  organization: Federal Authority for Identity, Citizenship, Customs and Port Security (ICP)
+  aliases:
+    en:
+    - ICP
+    - Federal Authority for Identity, Citizenship, Customs and Port Security
+    - Federal Authority for Identity and Citizenship
+    ar:
+    - الهيئة الاتحادية للهوية والجنسية والجمارك وأمن المنافذ
+    - الهيئة الاتحادية للهوية
+    translit: []
+  domains:
+  - icp.gov.ae
+  subdomain_policy: listed
+  allowed_subdomains:
+  - www
+  source_class: A
+  jurisdiction: federal
+  authority_scope:
+  - immigration
+  - fees
+  categories:
+  - immigration
+  - fees
+  - announcement
+  languages:
+  - en
+  - ar
+  source_urls:
+  - url: https://icp.gov.ae/
+    kind: html
+    terms_reviewed: false
+  provenance: 'candidate: government-type entry in backend/app/core/brands.yaml (read-only); not yet verified
+    by a human reviewer'
+  status: pending
+  reviewer: null
+  verified_at: null
+  max_age_days: 180
+  brand_token: icp
+- id: mohre
+  organization: Ministry of Human Resources and Emiratisation (MoHRE)
+  aliases:
+    en:
+    - MoHRE
+    - Ministry of Human Resources and Emiratisation
+    ar:
+    - وزارة الموارد البشرية والتوطين
+    - وزارة الموارد البشرية
+    translit: []
+  domains:
+  - mohre.gov.ae
+  subdomain_policy: listed
+  allowed_subdomains:
+  - www
+  source_class: A
+  jurisdiction: federal
+  authority_scope:
+  - fees
+  - announcement
+  categories:
+  - fees
+  - announcement
+  - financial_aid
+  languages:
+  - en
+  - ar
+  source_urls:
+  - url: https://www.mohre.gov.ae/
+    kind: html
+    terms_reviewed: false
+  provenance: 'candidate: government-type entry in backend/app/core/brands.yaml (read-only); not yet verified
+    by a human reviewer'
+  status: pending
+  reviewer: null
+  verified_at: null
+  max_age_days: 180
+  brand_token: mohre
+- id: rta
+  organization: Roads and Transport Authority (Dubai)
+  aliases:
+    en:
+    - RTA
+    - Roads and Transport Authority
+    ar:
+    - هيئة الطرق والمواصلات
+    translit: []
+  domains:
+  - rta.ae
+  subdomain_policy: listed
+  allowed_subdomains:
+  - www
+  source_class: A
+  jurisdiction: dubai
+  authority_scope:
+  - traffic
+  - fees
+  categories:
+  - traffic
+  - fees
+  - announcement
+  languages:
+  - en
+  - ar
+  source_urls:
+  - url: https://www.rta.ae/
+    kind: html
+    terms_reviewed: false
+  provenance: 'candidate: government-type entry in backend/app/core/brands.yaml (read-only); not yet verified
+    by a human reviewer'
+  status: pending
+  reviewer: null
+  verified_at: null
+  max_age_days: 180
+  brand_token: rta
+- id: dewa
+  organization: Dubai Electricity and Water Authority (DEWA)
+  aliases:
+    en:
+    - DEWA
+    - Dubai Electricity and Water Authority
+    ar:
+    - هيئة كهرباء ومياه دبي
+    translit: []
+  domains:
+  - dewa.gov.ae
+  subdomain_policy: listed
+  allowed_subdomains:
+  - www
+  source_class: A
+  jurisdiction: dubai
+  authority_scope:
+  - fees
+  categories:
+  - fees
+  - announcement
+  languages:
+  - en
+  - ar
+  source_urls:
+  - url: https://www.dewa.gov.ae/
+    kind: html
+    terms_reviewed: false
+  provenance: 'candidate: government-type entry in backend/app/core/brands.yaml (read-only); not yet verified
+    by a human reviewer'
+  status: pending
+  reviewer: null
+  verified_at: null
+  max_age_days: 180
+  brand_token: dewa
+- id: wam
+  organization: Emirates News Agency (WAM)
+  aliases:
+    en:
+    - WAM
+    - Emirates News Agency
+    ar:
+    - وكالة أنباء الإمارات
+    - وام
+    translit: []
+  domains:
+  - wam.ae
+  subdomain_policy: listed
+  allowed_subdomains:
+  - www
+  source_class: B
+  jurisdiction: federal
+  authority_scope: []
+  categories:
+  - announcement
+  languages:
+  - en
+  - ar
+  source_urls:
+  - url: https://www.wam.ae/en
+    kind: html
+    terms_reviewed: false
+  provenance: 'candidate: named in the WS2 implementation brief; not yet verified by a human reviewer'
+  status: pending
+  reviewer: null
+  verified_at: null
+  max_age_days: 180
+- id: abu-dhabi-media-office
+  organization: Abu Dhabi Media Office
+  aliases:
+    en:
+    - Abu Dhabi Media Office
+    - ADMO
+    ar:
+    - مكتب أبوظبي الإعلامي
+    translit: []
+  domains:
+  - mediaoffice.abudhabi
+  subdomain_policy: listed
+  allowed_subdomains:
+  - www
+  source_class: B
+  jurisdiction: abu_dhabi
+  authority_scope: []
+  categories:
+  - announcement
+  languages:
+  - en
+  - ar
+  source_urls:
+  - url: https://www.mediaoffice.abudhabi/en/
+    kind: html
+    terms_reviewed: false
+  provenance: 'candidate: named in the WS2 implementation brief; not yet verified by a human reviewer;
+    domain uses the .abudhabi TLD and needs explicit approval'
+  status: pending
+  reviewer: null
+  verified_at: null
+  max_age_days: 180
+- id: dubai-media-office
+  organization: Government of Dubai Media Office
+  aliases:
+    en:
+    - Government of Dubai Media Office
+    - Dubai Media Office
+    ar:
+    - المكتب الإعلامي لحكومة دبي
+    translit: []
+  domains:
+  - mediaoffice.ae
+  subdomain_policy: listed
+  allowed_subdomains:
+  - www
+  source_class: B
+  jurisdiction: dubai
+  authority_scope: []
+  categories:
+  - announcement
+  languages:
+  - en
+  - ar
+  source_urls:
+  - url: https://www.mediaoffice.ae/en
+    kind: html
+    terms_reviewed: false
+  provenance: 'candidate: named in the WS2 implementation brief; not yet verified by a human reviewer'
+  status: pending
+  reviewer: null
+  verified_at: null
+  max_age_days: 180
+- id: the-national
+  organization: The National
+  aliases:
+    en:
+    - The National
+    ar:
+    - ذا ناشيونال
+    translit: []
+  domains:
+  - thenationalnews.com
+  subdomain_policy: listed
+  allowed_subdomains:
+  - www
+  source_class: C
+  jurisdiction: federal
+  authority_scope: []
+  categories:
+  - announcement
+  languages:
+  - en
+  - ar
+  source_urls: []
+  provenance: 'candidate: independent UAE news outlet; Class C supporting context only; not yet reviewed'
+  status: pending
+  reviewer: null
+  verified_at: null
+  max_age_days: 180
+- id: khaleej-times
+  organization: Khaleej Times
+  aliases:
+    en:
+    - Khaleej Times
+    ar:
+    - خليج تايمز
+    translit: []
+  domains:
+  - khaleejtimes.com
+  subdomain_policy: listed
+  allowed_subdomains:
+  - www
+  source_class: C
+  jurisdiction: federal
+  authority_scope: []
+  categories:
+  - announcement
+  languages:
+  - en
+  - ar
+  source_urls: []
+  provenance: 'candidate: independent UAE news outlet; Class C supporting context only; not yet reviewed'
+  status: pending
+  reviewer: null
+  verified_at: null
+  max_age_days: 180
+- id: gulf-news
+  organization: Gulf News
+  aliases:
+    en:
+    - Gulf News
+    ar:
+    - جلف نيوز
+    translit: []
+  domains:
+  - gulfnews.com
+  subdomain_policy: listed
+  allowed_subdomains:
+  - www
+  source_class: C
+  jurisdiction: federal
+  authority_scope: []
+  categories:
+  - announcement
+  languages:
+  - en
+  - ar
+  source_urls: []
+  provenance: 'candidate: independent UAE news outlet; Class C supporting context only; not yet reviewed'
+  status: pending
+  reviewer: null
+  verified_at: null
+  max_age_days: 180
