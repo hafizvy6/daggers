@@ -101,7 +101,18 @@ export default async function Sweep() {
     if (meta) meta.textContent = `${t("sweep.engine", { engine: data.engine || "—" })}${data.cached ? " · " + t("sweep.cached") : ""}`;
     if (!data.results || data.results.length === 0) {
       const body = data.source_kind === "unconfigured" ? t("sweep.unconfiguredBody") : t("sweep.noResultsBody");
-      resultsHost.replaceChildren(emptyState({ title: t("sweep.emptyTitle"), body }));
+      const box = el("div", {}, emptyState({ title: t("sweep.emptyTitle"), body }));
+      // Surface the server's own reason — adapter errors carry only type names,
+      // never secrets. "duckduckgo: ProviderError" = egress blocked;
+      // "duckduckgo: no results" = the provider returned an empty page we could not parse.
+      if (Array.isArray(data.errors) && data.errors.length) {
+        box.append(el("p", {
+          class: "mono ltr",
+          style: "font-size:var(--fs-xs); margin:var(--s2) auto 0; max-width:64ch; text-align:center; color:var(--ink-muted); overflow-wrap:anywhere",
+          text: data.errors.join(" · "),
+        }));
+      }
+      resultsHost.replaceChildren(box);
       running = false;
       runBtn.disabled = false;
       runBtn.lastChild.textContent = t("sweep.run");

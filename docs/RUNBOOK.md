@@ -130,7 +130,7 @@ Use **Analyst queue** in the Radar feed (or `include_unknown=true&include_suppre
 
 ## 5. Sweep (Search / Maps)
 
-The endpoint is disabled as a proxy until you opt in:
+Typed search is accepted by default (`SWEEP_ALLOW_ARBITRARY=1`), but **a query goes nowhere until a provider is enabled** — without one every run honestly reports `source_kind: "unconfigured"` and an empty `results` array. Enable one:
 
 ```bash
 # Search: either keyless DuckDuckGo HTML…
