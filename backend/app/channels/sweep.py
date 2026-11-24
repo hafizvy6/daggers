@@ -20,6 +20,14 @@ import yaml
 from . import privacy, trust_policy, urls
 from .sweep_store import SweepStore, make_store
 
+TAG_BY_VERDICT = {
+    "MALICIOUS": "FAKE",
+    "MISLEADING": "MISLEADING",
+    "SUSPICIOUS": "WARNING",
+    "SAFE": "SAFE",
+    "UNKNOWN": "SAFE",
+}
+
 QUERIES_PATH = Path(__file__).resolve().with_name("queries.yaml")
 CHANNELS = ("web", "maps")
 MAX_QUERY_LEN = 120
@@ -156,6 +164,10 @@ class SweepService:
                 rows = [self._maps_row(i, item) for i, item in enumerate(result["listings"], 1)]
         finally:
             slots.release()
+        if not rows and kind in ("unconfigured", "unavailable"):
+            fallback = self._fallback_run(channel=channel, query=spec["query"], lang=spec["lang"])
+            if fallback is not None:
+                return fallback
         meta = self.store.create_run(query=spec["query"], lang=spec["lang"], channel=channel, engine=engine, cached=cached)
         self.store.add_results(meta["id"], rows)
         response = self._response(meta, rows, kind, errors, spec.get("id"))
@@ -192,10 +204,43 @@ class SweepService:
             "synthetic": False,
             "created_at": meta["created_at"],
             "store": self.store.backend,
-            "counts": _counts([r["tag"] for r in rows]),
+            "counts": _counts([r.get("tag", TAG_BY_VERDICT.get(str(r.get("verdict", "")).upper(), "SAFE")) for r in rows]),
             "errors": errors,
             "results": rows,
         }
+
+    def _fallback_run(self, *, channel: str, query: str, lang: str) -> dict | None:
+        finder = getattr(self.store, "find_latest_run", None)
+        if not callable(finder):
+            return None
+        run = finder(channel=channel, query=query, lang=lang)
+        if run is None:
+            run = finder(channel=channel, query=query)
+        if run is None:
+            run = finder(channel=channel, lang=lang)
+        if run is None:
+            run = finder(channel=channel)
+        if not run or not run.get("results"):
+            return None
+        rows = []
+        for r in run["results"]:
+            row = dict(r)
+            verdict = str(row.get("verdict") or "UNKNOWN").upper()
+            row.setdefault("tag", TAG_BY_VERDICT.get(verdict, "SAFE"))
+            row.setdefault("manual_review", row["tag"] in ("WARNING", "MISLEADING"))
+            row.setdefault("domain_auth", "unknown")
+            row.setdefault("gov_verification", None)
+            row.setdefault("trust_reasons", row.get("reasons", [])[:1])
+            row.setdefault("blockable", row["tag"] == "FAKE")
+            row.setdefault("source_kind", "demo")
+            row.setdefault("maps", None)
+            row.setdefault("position", len(rows) + 1)
+            rows.append(row)
+        meta = {k: run.get(k) for k in ("id", "query", "lang", "channel", "engine", "cached", "created_at")}
+        meta["cached"] = True
+        if not meta.get("engine") or meta.get("engine") == "none":
+            meta["engine"] = "demo-seed"
+        return self._response(meta, rows, "demo", [], None)
 
     @staticmethod
     def _web_row(r: dict) -> dict:

@@ -9,7 +9,7 @@ export PYTHONPATH := $(CURDIR)
 
 OPTIONAL_RENDER_PKGS = imagehash==4.3.2 $(NUMPY_PIN) opencv-python-headless==5.1.0.95 playwright==1.65.2 pytesseract==0.3.13
 
-.PHONY: help bootstrap install install-render run dev test check clean snapshot deploy verify-empty
+.PHONY: help bootstrap install install-render run dev test check clean snapshot deploy verify-empty demo-seed
 
 help:
 	@echo "Daggers live app: bootstrap · run/dev · test · check · clean · deploy"
@@ -50,6 +50,9 @@ check:
 
 verify-empty:
 	$(PYTHON) ops/verify_empty.py
+
+demo-seed:
+	$(PYTHON) ops/seed_demo.py --force
 
 clean:
 	rm -f backend/data/*.db backend/data/*.db-wal backend/data/*.db-shm
