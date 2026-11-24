@@ -31,6 +31,8 @@ The app serves the bilingual PWA at `http://localhost:8000/`. `/api/mode` always
 
 No key, browser, GPU, or network is required to *boot*. External data only flows when you turn an adapter on.
 
+> **Sweep returns empty even though typed search is allowed?** You also need a provider: `SEARCH_LIVE_ENABLED=1` (keyless DuckDuckGo, no API key) and optionally `SERPER_API_KEY` — or `MAPS_LIVE_ENABLED=1` + `GOOGLE_PLACES_API_KEY`. Everything else (the gate, typed queries, PII filtering) is already on; without a provider the sweep honestly returns zero rows rather than fabricating any.
+
 ---
 
 ## Architecture
