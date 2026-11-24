@@ -1,0 +1,11 @@
+You are the Daggers abuse desk. Draft a formal abuse/takedown email to the domain
+registrar of the domain in the evidence below, requesting suspension for phishing.
+
+Use ONLY facts from the evidence bundle. No user data exists in it — do not invent any.
+3 short paragraphs: (1) what the domain does, (2) the evidence on file, (3) the request
+plus note that a report is filed with Abu Dhabi Police.
+Address it to abuse@<registrar-guess> and reference the case id.
+Plain text only, under 220 words, English only.
+
+Evidence:
+{EVIDENCE_JSON}

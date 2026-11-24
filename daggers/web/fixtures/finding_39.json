@@ -1,0 +1,61 @@
+{
+  "id": 39,
+  "domain": "dubaipolice-fine-pay.info",
+  "verdict": "MALICIOUS",
+  "score": 0.9,
+  "brand": "Abu Dhabi Police",
+  "reasons": [
+    "claims to be Abu Dhabi Police on a non-official domain",
+    "lure keywords 'fine' + 'pay' in the address",
+    "certificate issued 90 minutes ago",
+    "96% visual match with the official fines payment page",
+    "asks for full card details and the OTP"
+  ],
+  "cert_issued": "2026-11-24T07:58:00Z",
+  "first_seen": "2026-11-24T07:58:00Z",
+  "clone": 96,
+  "evidence_url": null,
+  "gallery_match": "adpolice.gov.ae/en/fines",
+  "source": "crt.sh",
+  "is_case_file": false,
+  "age_min": 96,
+  "cert_age_min": 90,
+  "registrar": "ALIBABA.COM SINGAPORE E-COMMERCE PTE LTD",
+  "path": "/pay-fine",
+  "verdict_note": "Impersonates Abu Dhabi Police fines payment to collect card details.",
+  "scam_type": "fake-gov-fine",
+  "signals": [
+    {
+      "label": "Government entity claim on a non-official domain",
+      "weight": 0.55,
+      "note": "",
+      "label_ar": "ادعاء حكومي على نطاق غير رسمي"
+    },
+    {
+      "label": "Certificate younger than 24 hours",
+      "weight": 0.25,
+      "note": "",
+      "label_ar": "شهادة عمرها أقل من 24 ساعة"
+    },
+    {
+      "label": "Visual clone of the official page",
+      "weight": 0.6,
+      "note": "",
+      "label_ar": "نسخة بصرية من الصفحة الرسمية"
+    },
+    {
+      "label": "Payment-harvest fields (card + OTP)",
+      "weight": 0.25,
+      "note": "",
+      "label_ar": "حقول جمع بطاقة + رمز تحقق"
+    }
+  ],
+  "verdict_note_ar": "ينتحل خدمة سداد مخالفات شرطة أبوظبي لجمع بيانات البطاقات.",
+  "reasons_ar": [
+    "ادعاء انتساب لجهة حكومية على نطاق غير رسمي",
+    "كلمتا إغراء «fine» و«pay» في العنوان",
+    "صدرت الشهادة قبل 90 دقيقة",
+    "تطابق بصري 96% مع صفحة سداد المخالفات الرسمية",
+    "يطلب بيانات البطاقة كاملة ورمز التحقق"
+  ]
+}

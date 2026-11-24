@@ -1,0 +1,170 @@
+/* ============================================================
+   Daggers · layout — app shell grid · LOGICAL PROPERTIES ONLY
+   (margin-inline-*, inset-inline-*, text-align:start — never left/right)
+   ============================================================ */
+
+body {
+  display: grid;
+  grid-template-areas:
+    "topbar topbar"
+    "banner banner"
+    "nav    main";
+  grid-template-columns: 224px minmax(0, 1fr);
+  grid-template-rows: var(--topbar-h) auto 1fr;
+  min-height: 100dvh;
+}
+
+/* ---------------- topbar ---------------------------------- */
+.topbar {
+  grid-area: topbar;
+  position: sticky; top: 0; z-index: 50;
+  display: flex; align-items: center; gap: var(--s4);
+  padding-inline: var(--s4);
+  background: var(--surface);
+  border-block-end: var(--border);
+}
+
+.brand {
+  display: inline-flex; align-items: center; gap: var(--s2);
+  font-weight: 600; font-size: var(--fs-lg);
+  color: var(--ink); text-decoration: none;
+  white-space: nowrap;
+}
+.brand svg { flex: none; }
+.brand .brand-sub {
+  font-family: var(--font-mono); font-size: var(--fs-xs); font-weight: 500;
+  color: var(--ink-muted); letter-spacing: 0.04em;
+}
+html[lang="ar"] .brand .brand-sub { letter-spacing: 0; }
+
+.topbar-spacer { flex: 1 1 auto; }
+.topbar-cluster { display: flex; align-items: center; gap: var(--s2); }
+
+/* heartbeat dot */
+.heartbeat { display: inline-flex; align-items: center; gap: var(--s2);
+  font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--ink-muted); }
+.heartbeat .dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--tag-safe); border: 2px solid var(--ink);
+  animation: pulse 2.2s ease-in-out infinite;
+}
+.heartbeat.is-down .dot { background: var(--tag-fake); animation: none; }
+@keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.35); } }
+
+/* ---------------- nav (rail on desktop) -------------------- */
+.nav {
+  grid-area: nav;
+  padding: var(--s4) var(--s3) var(--s6);
+  border-inline-end: var(--border);
+  background: var(--paper);
+  display: flex; flex-direction: column; gap: var(--s1);
+  overflow-y: auto;
+}
+.nav-group-label {
+  font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--ink-muted);
+  letter-spacing: 0.06em; text-transform: uppercase;
+  padding: var(--s3) var(--s3) var(--s1);
+}
+html[lang="ar"] .nav-group-label { letter-spacing: 0; }
+.nav-link {
+  display: flex; align-items: center; gap: var(--s3);
+  min-height: 44px; padding: var(--s2) var(--s3);
+  border: 2px solid transparent; border-radius: var(--radius);
+  color: var(--ink); text-decoration: none; font-weight: 500;
+  transition: background var(--dur), border-color var(--dur);
+}
+.nav-link svg { flex: none; }
+.nav-link:hover { background: var(--accent-tint); }
+.nav-link[aria-current="page"] {
+  background: var(--accent-tint); border-color: var(--ink);
+  box-shadow: var(--shadow-press);
+}
+.nav-link { flex-wrap: nowrap; white-space: nowrap; }
+.nav-link .nav-badge {
+  margin-inline-start: auto;
+  font-family: var(--font-mono); font-size: var(--fs-xs);
+  background: var(--ink); color: var(--paper);
+  padding: 1px 6px; border-radius: 999px;
+}
+
+/* ---------------- main ------------------------------------- */
+.main {
+  grid-area: main;
+  width: 100%; max-width: var(--content-max);
+  margin-inline: auto;
+  padding: var(--s5) var(--s5) var(--s7);
+  min-width: 0;
+}
+
+.page-head { display: flex; align-items: end; justify-content: space-between; gap: var(--s4);
+  margin-block-end: var(--s5); flex-wrap: wrap; }
+.page-head h1 { margin: 0; }
+.page-head .page-kicker {
+  font-family: var(--font-mono); font-size: var(--fs-xs); font-weight: 500;
+  color: var(--accent-deep); text-transform: uppercase; letter-spacing: 0.08em;
+  margin-block-end: var(--s1);
+}
+html[lang="ar"] .page-head .page-kicker { letter-spacing: 0; }
+
+/* ---------------- banner (offline / demo) ------------------ */
+.banner {
+  grid-area: banner;
+  display: none;
+  align-items: center; gap: var(--s3);
+  padding: var(--s2) var(--s4);
+  background: var(--butter-tint); color: var(--butter-ink);
+  border-block-end: var(--border);
+  font-size: var(--fs-sm); font-weight: 500;
+}
+.banner.is-on { display: flex; }
+.banner.is-demo { background: var(--accent-tint); color: var(--accent-deep); }
+.banner .banner-tag {
+  font-family: var(--font-mono); font-size: var(--fs-xs); font-weight: 600;
+  border: 2px solid currentColor; border-radius: var(--radius);
+  padding: 0 6px; flex: none;
+}
+
+/* ---------------- responsive -------------------------------- */
+@media (max-width: 999px) {
+  body { grid-template-columns: minmax(0, 1fr); grid-template-areas:
+    "topbar" "banner" "main"; }
+  .nav {
+    position: fixed; inset-block: 0; inset-inline-start: 0; z-index: 80;
+    width: min(320px, 86vw);
+    border-inline-end: var(--border);
+    box-shadow: var(--shadow-lift);
+    transform: translateX(-105%);
+    transition: transform var(--dur-slow);
+    padding-block-start: calc(var(--topbar-h) + var(--s3));
+  }
+  html[dir="rtl"] .nav { transform: translateX(105%); }
+  .nav.is-open, html[dir="rtl"] .nav.is-open { transform: translateX(0); }
+  .nav-scrim {
+    position: fixed; inset: 0; z-index: 70;
+    background: rgba(38, 38, 46, 0.28);
+    display: none;
+  }
+  .nav-scrim.is-open { display: block; }
+  .main { padding: var(--s4) var(--s4) var(--s7); }
+  .menu-btn { display: inline-flex; }
+}
+@media (min-width: 1000px) {
+  .menu-btn { display: none; }
+  .nav-scrim { display: none !important; }
+}
+@media (max-width: 640px) {
+  .topbar { gap: var(--s2); padding-inline: var(--s3); }
+  .brand .brand-sub { display: none; }
+  .heartbeat .hb-label { display: none; }
+  .page-head { margin-block-end: var(--s4); }
+}
+
+/* ---------------- grids used by views ----------------------- */
+.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4); }
+.grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s4); }
+.split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s4); }
+@media (max-width: 860px) { .grid-2, .grid-3, .split { grid-template-columns: minmax(0, 1fr); } }
+
+.stack { display: flex; flex-direction: column; gap: var(--s4); }
+.row { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+.row-end { margin-inline-start: auto; }

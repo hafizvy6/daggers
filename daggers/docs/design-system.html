@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Daggers — Design System (Neo-Outline Soft)</title>
+<link rel="stylesheet" href="../web/css/tokens.css">
+<link rel="stylesheet" href="../web/css/base.css">
+<link rel="stylesheet" href="../web/css/layout.css">
+<link rel="stylesheet" href="../web/css/components.css">
+<style>
+  body { display:block; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 40px 20px 80px; }
+  h1 { font-size: 2rem; margin-bottom: 4px; }
+  .lede { color: var(--ink-muted); max-width: 68ch; }
+  section { margin-top: var(--s6); }
+  .sect-kicker { font-family: var(--font-mono); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .08em; color: var(--accent-deep); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: var(--s3); margin-top: var(--s3); }
+  .sw { display:flex; gap:10px; align-items:center; border: var(--border); border-radius: var(--radius); background: var(--surface); padding: 8px; box-shadow: var(--shadow-press); }
+  .chipbox { width: 40px; height: 40px; border-radius: var(--radius); border: 2px solid var(--ink); flex: none; }
+  .meta { display:flex; flex-direction: column; min-width: 0; }
+  .meta code { font-family: var(--font-mono); font-size: 11px; }
+  .meta span { font-family: var(--font-mono); font-size: 11px; color: var(--ink-muted); }
+  .row-demo { display:flex; flex-wrap:wrap; gap: var(--s3); align-items:center; margin-top: var(--s3); }
+  .type td { padding: 6px 14px 6px 0; border-bottom: 1px solid var(--line-soft); }
+  .mono { font-family: var(--font-mono); }
+  .ok { color: var(--tag-safe-ink); font-weight: 600; }
+  .no { color: var(--tag-fake-ink); font-weight: 600; }
+  .cols { display:grid; grid-template-columns: 1fr 1fr; gap: var(--s4); }
+  @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
+  ul { margin: 6px 0; padding-inline-start: 20px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="sect-kicker">Daggers · WS3</div>
+  <h1>Neo-Outline Soft</h1>
+  <p class="lede">Neo-brutalist skeleton — 2px ink outlines, hard offset shadows, mono labels —
+  softened into something a bank or the police can put in front of the public. Warm paper, calm teal,
+  four honest tags. Light only, because it survives a bad projector.</p>
+
+  <section>
+    <div class="sect-kicker">01 · Palette</div>
+    <div class="grid"><div class="sw"><div class="chipbox" style="background:#FAF7F1"></div><div class="meta"><code>--paper</code><span>#FAF7F1</span></div></div>
+<div class="sw"><div class="chipbox" style="background:#FFFFFF"></div><div class="meta"><code>--surface</code><span>#FFFFFF</span></div></div>
+<div class="sw"><div class="chipbox" style="background:#26262E"></div><div class="meta"><code>--ink</code><span>#26262E</span></div></div>
+<div class="sw"><div class="chipbox" style="background:#6B6B78"></div><div class="meta"><code>--ink-muted</code><span>#6B6B78</span></div></div>
+<div class="sw"><div class="chipbox" style="background:#E7E1D7"></div><div class="meta"><code>--line-soft</code><span>#E7E1D7</span></div></div>
+<div class="sw"><div class="chipbox" style="background:#0F766E"></div><div class="meta"><code>--accent</code><span>#0F766E</span></div></div>
+<div class="sw"><div class="chipbox" style="background:#E3F1EF"></div><div class="meta"><code>--accent-tint</code><span>#E3F1EF</span></div></div>
+<div class="sw"><div class="chipbox" style="background:#0B5A54"></div><div class="meta"><code>--accent-deep</code><span>#0B5A54</span></div></div>
+<div class="sw"><div class="chipbox" style="background:#2F9E68"></div><div class="meta"><code>--tag-safe</code><span>#2F9E68</span></div></div>
+<div class="sw"><div class="chipbox" style="background:#E4F4EB"></div><div class="meta"><code>--tag-safe-bg</code><span>#E4F4EB</span></div></div>
+<div class="sw"><div class="chipbox" style="background:#1F7A4C"></div><div class="meta"><code>--tag-safe-ink</code><span>#1F7A4C</span></div></div>
+<div class="sw"><div class="chipbox" style="background:#D8921F"></div><div class="meta"><code>--tag-warn</code><span>#D8921F</span></div></div>
+<div class="sw"><div class="chipbox" style="background:#FBF0DA"></div><div class="meta"><code>--tag-warn-bg</code><span>#FBF0DA</span></div></div>
+<div class="sw"><div class="chipbox" style="background:#8A5A0B"></div><div class="meta"><code>--tag-warn-ink</code><span>#8A5A0B</span></div></div>
+<div class="sw"><div class="chipbox" style="background:#D96F32"></div><div class="meta"><code>--tag-mislead</code><span>#D96F32</span></div></div>
+<div class="sw"><div class="chipbox" style="background:#FBE9DC"></div><div class="meta"><code>--tag-mislead-bg</code><span>#FBE9DC</span></div></div>
+<div class="sw"><div class="chipbox" style="background:#A34A16"></div><div class="meta"><code>--tag-mislead-ink</code><span>#A34A16</span></div></div>
+<div class="sw"><div class="chipbox" style="background:#D64545"></div><div class="meta"><code>--tag-fake</code><span>#D64545</span></div></div>
+<div class="sw"><div class="chipbox" style="background:#FBE5E5"></div><div class="meta"><code>--tag-fake-bg</code><span>#FBE5E5</span></div></div>
+<div class="sw"><div class="chipbox" style="background:#A62B2B"></div><div class="meta"><code>--tag-fake-ink</code><span>#A62B2B</span></div></div>
+<div class="sw"><div class="chipbox" style="background:#F6C445"></div><div class="meta"><code>--butter</code><span>#F6C445</span></div></div>
+<div class="sw"><div class="chipbox" style="background:#FCF3D7"></div><div class="meta"><code>--butter-tint</code><span>#FCF3D7</span></div></div>
+<div class="sw"><div class="chipbox" style="background:#6B4C05"></div><div class="meta"><code>--butter-ink</code><span>#6B4C05</span></div></div></div>
+  </section>
+
+  <section>
+    <div class="sect-kicker">02 · The four tags</div>
+    <p class="lede">Base hues paint dots, bars and 4px rules (non-text, ≥3:1). Tag <b>text</b> uses the
+    <code>-ink</code> variant so small mono type clears 4.5:1 on its tint. That distinction is the whole tag rule.</p>
+    <div class="row-demo">
+      <span class="tag tag-safe"><span class="tag-dot"></span>SAFE</span>
+      <span class="tag tag-warning"><span class="tag-dot"></span>WARNING</span>
+      <span class="tag tag-mislead"><span class="tag-dot"></span>MISLEADING</span>
+      <span class="tag tag-fake"><span class="tag-dot"></span>FAKE</span>
+      <span class="tag tag-unknown"><span class="tag-dot"></span>UNKNOWN</span>
+    </div>
+  </section>
+
+  <section>
+    <div class="sect-kicker">03 · Buttons &amp; chips</div>
+    <div class="row-demo">
+      <button class="btn btn-primary">Primary</button>
+      <button class="btn btn-ink">Ink</button>
+      <button class="btn">Default</button>
+      <button class="btn btn-danger">Danger</button>
+      <button class="btn btn-ghost">Ghost</button>
+      <span class="chip"><span class="chip-k">source</span><span class="mono ltr">crt.sh</span></span>
+      <span class="chip chip-reason">brand typo 'adcb' (distance 1)</span>
+    </div>
+    <div class="row-demo">
+      <div class="score-bar" style="min-width:220px"><div class="track"><div class="fill fill-fake" style="--w:88%"></div></div><span class="val ltr">0.88</span></div>
+      <div class="score-bar" style="min-width:220px"><div class="track"><div class="fill fill-warning" style="--w:52%"></div></div><span class="val ltr">0.52</span></div>
+      <div class="score-bar" style="min-width:220px"><div class="track"><div class="fill fill-safe" style="--w:3%"></div></div><span class="val ltr">0.03</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sect-kicker">04 · Type scale</div>
+    <table class="type">
+      <tr><td style="font-size:44px;font-weight:600">44</td><td><code>--fs-3xl</code> · hero tag</td></tr>
+      <tr><td style="font-size:32px;font-weight:600">32</td><td><code>--fs-2xl</code> · the big score</td></tr>
+      <tr><td style="font-size:24px;font-weight:600">24</td><td><code>--fs-xl</code> · screen title</td></tr>
+      <tr><td style="font-size:18px;font-weight:600">18</td><td><code>--fs-lg</code> · card title</td></tr>
+      <tr><td style="font-size:15px">15</td><td><code>--fs-md</code> · body (EN 1.55 / AR 1.75 line-height)</td></tr>
+      <tr><td style="font-size:13px">13</td><td><code>--fs-sm</code> · secondary</td></tr>
+      <tr><td class="mono" style="font-size:12px">12 · adcb-secure-login.xyz</td><td><code>--fs-xs</code> · mono labels, domains, scores</td></tr>
+    </table>
+    <p class="lede" style="margin-top:12px">IBM Plex Sans · IBM Plex Sans Arabic · IBM Plex Mono — self-hosted woff2, no CDN.</p>
+  </section>
+
+  <section>
+    <div class="sect-kicker">05 · The contract</div>
+    <div class="cols">
+      <div class="card">
+        <div class="card-title">Always <span class="card-kicker">do</span></div>
+        <ul>
+          <li><span class="ok">✓</span> tokens only — <code>var(--…)</code></li>
+          <li><span class="ok">✓</span> logical properties (inline/block)</li>
+          <li><span class="ok">✓</span> every string through <code>t("ns.key")</code></li>
+          <li><span class="ok">✓</span> LTR islands for domains &amp; numbers</li>
+          <li><span class="ok">✓</span> paper-lift on actionable cards only</li>
+          <li><span class="ok">✓</span> the AI case-writer is the only show animation</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-title">Never <span class="card-kicker">don't</span></div>
+        <ul>
+          <li><span class="no">✕</span> dark mode, neon glow, blurred shadows</li>
+          <li><span class="no">✕</span> pure black, gradients on data</li>
+          <li><span class="no">✕</span> <code>left / right</code> in CSS</li>
+          <li><span class="no">✕</span> raw hex outside <code>tokens.css</code></li>
+          <li><span class="no">✕</span> italics in Arabic · letter-spacing in Arabic</li>
+          <li><span class="no">✕</span> a verdict the API didn't send</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sect-kicker">06 · Gates</div>
+    <div class="row-demo">
+      <span class="chip"><span class="chip-k">i18n</span><span class="mono">295 × 2 ✓</span></span>
+      <span class="chip"><span class="chip-k">contrast</span><span class="mono">≥ 4.5:1 ✓</span></span>
+      <span class="chip"><span class="chip-k">external requests</span><span class="mono">0 ✓</span></span>
+      <span class="chip"><span class="chip-k">AI rules</span><span class="mono">8/8 ✓</span></span>
+    </div>
+  </section>
+</div>
+</body>
+</html>

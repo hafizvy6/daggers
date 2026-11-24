@@ -1,0 +1,102 @@
+{
+  "scans": [
+    {
+      "kind": "url",
+      "input": "https://adcb-secure-login.xyz/verify",
+      "verdict": "MALICIOUS",
+      "score": 0.93,
+      "reasons": [
+        "brand typo 'adcb' (distance 1) on a non-official domain",
+        "certificate issued 42 minutes ago",
+        "login form posts to a foreign host",
+        "97% visual match with adcb.ae/login"
+      ],
+      "evidence_url": null,
+      "scam_type": "fake-banking-login",
+      "offline_capable": true,
+      "finding_id": 42,
+      "reasons_ar": [
+        "خطأ في اسم العلامة «adcb» (مسافة حرف واحد) على نطاق غير رسمي",
+        "صدرت الشهادة قبل 42 دقيقة — موقع حديث الولادة",
+        "نموذج الدخول يُرسل البيانات إلى خادم خارجي: collect.adcb-verify.top",
+        "تطابق بصري 97% مع صفحة adcb.ae/login"
+      ]
+    },
+    {
+      "kind": "url",
+      "input": "https://www.adcb.ae/personal.html",
+      "verdict": "SAFE",
+      "score": 0.02,
+      "reasons": [
+        "matches the official ADCB domain and certificate"
+      ],
+      "evidence_url": null,
+      "scam_type": null,
+      "offline_capable": true,
+      "finding_id": null,
+      "reasons_ar": [
+        "يطابق نطاق ADCB الرسمي وشهادته"
+      ]
+    },
+    {
+      "kind": "text",
+      "input": "Congrats! Abu Dhabi is giving away 1 million dirhams to celebrate the national day. Claim here: https://cbuae-grant-1m.award",
+      "verdict": "SUSPICIOUS",
+      "score": 0.58,
+      "reasons": [
+        "claims a 1 million dirham giveaway no official site announces",
+        "link 'cbuae-grant-1m.award' is not an official domain",
+        "asks for a 'processing payment' before the grant"
+      ],
+      "evidence_url": null,
+      "scam_type": "fake-giveaway",
+      "offline_capable": true,
+      "finding_id": 38,
+      "reasons_ar": [
+        "يدّعي جائزة مليون درهم لا تعلنها أي جهة رسمية",
+        "الرابط «cbuae-grant-1m.award» ليس نطاقًا رسميًا",
+        "يطلب «رسوم معالجة» قبل الجائزة"
+      ]
+    },
+    {
+      "kind": "text",
+      "input": "Your package is on hold. Pay 5 AED within 24 hours here: https://aramex-delivery-fee.click/pay",
+      "verdict": "MALICIOUS",
+      "score": 0.81,
+      "reasons": [
+        "brand name 'aramex' on a non-official domain",
+        "small 'clearance fee' before delivery — classic pattern",
+        "89% visual match with the Aramex tracking page"
+      ],
+      "evidence_url": null,
+      "scam_type": "fake-delivery-fee",
+      "offline_capable": true,
+      "finding_id": 40,
+      "reasons_ar": [
+        "اسم العلامة «aramex» على نطاق غير رسمي",
+        "«رسم تخليص» بسيط قبل التسليم — نمط معروف",
+        "تطابق بصري 89% مع صفحة تتبّع أرامكس"
+      ]
+    },
+    {
+      "kind": "url",
+      "input": "https://аmazon.ae/deals",
+      "verdict": "MALICIOUS",
+      "score": 0.9,
+      "reasons": [
+        "look-alike letters from a different alphabet (mixed-script)",
+        "visually identical to amazon.ae but a different site underneath",
+        "certificate issued 6 hours ago"
+      ],
+      "evidence_url": null,
+      "scam_type": "homograph",
+      "offline_capable": true,
+      "finding_id": null,
+      "reasons_ar": [
+        "حروف شبيهة من أبجدية أخرى (نصوص مختلطة)",
+        "يبدو مطابقًا لـ amazon.ae لكنه موقع مختلف تحته",
+        "صدرت الشهادة قبل 6 ساعات"
+      ]
+    }
+  ]
+}

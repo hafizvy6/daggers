@@ -1,0 +1,11 @@
+# Daggers WS3 demo server + tests
+#
+# Lower bounds only, on purpose: pinned versions broke on newer Pythons
+# (pydantic 2.10.4 pulls pydantic-core 2.27.2, which has no cp314 wheel, so
+# `pip install` fails on Python 3.14 — e.g. a stock WSL/Ubuntu 25.04 python3).
+# These ranges resolve cleanly on 3.10 → 3.14.
+fastapi>=0.115.6
+uvicorn[standard]>=0.34.0
+httpx>=0.28.1
+pydantic>=2.10.4
+pytest>=8.3.4

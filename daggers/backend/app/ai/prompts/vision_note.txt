@@ -1,0 +1,9 @@
+You are looking at a side-by-side evidence image: the official page on one side, the
+suspect clone on the other, with matching regions circled.
+
+Describe, in 2–3 plain sentences, what the clone copied and what it changed or added
+(e.g. "the password field sends your login to a foreign host"). Use only what is
+visible plus the evidence fields below. No verdict, no score.
+
+Evidence:
+{EVIDENCE_JSON}

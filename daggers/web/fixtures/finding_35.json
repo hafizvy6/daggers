@@ -1,0 +1,59 @@
+{
+  "id": 35,
+  "domain": "dewa-bill-pay.online",
+  "verdict": "SUSPICIOUS",
+  "score": 0.61,
+  "brand": "DEWA",
+  "reasons": [
+    "brand name 'dewa' on a non-official domain",
+    "lure keywords 'bill' + 'pay' in the address",
+    "78% visual match with the DEWA bill payment page",
+    "certificate issued 7 hours ago"
+  ],
+  "cert_issued": "2026-11-24T07:58:00Z",
+  "first_seen": "2026-11-24T07:58:00Z",
+  "clone": 78,
+  "evidence_url": null,
+  "gallery_match": "dewa.gov.ae/en/consumer/bill-payment",
+  "source": "crt.sh",
+  "is_case_file": false,
+  "age_min": 430,
+  "cert_age_min": 410,
+  "registrar": "NameCheap, Inc.",
+  "path": "/pay",
+  "verdict_note": "A DEWA bill payment look-alike — close to the real page, not the real page.",
+  "scam_type": "brand-impersonation",
+  "signals": [
+    {
+      "label": "Brand name on a non-official domain",
+      "weight": 0.25,
+      "note": "",
+      "label_ar": "اسم العلامة على نطاق غير رسمي"
+    },
+    {
+      "label": "Lure keywords in the address",
+      "weight": 0.2,
+      "note": "",
+      "label_ar": "كلمات إغراء في العنوان"
+    },
+    {
+      "label": "Partial visual match",
+      "weight": 0.35,
+      "note": "",
+      "label_ar": "تطابق بصري جزئي"
+    },
+    {
+      "label": "Certificate younger than 24 hours",
+      "weight": 0.25,
+      "note": "",
+      "label_ar": "شهادة عمرها أقل من 24 ساعة"
+    }
+  ],
+  "verdict_note_ar": "نسخة من صفحة سداد فواتير ديوا — قريبة من الصفحة الأصلية لكنها ليست هي.",
+  "reasons_ar": [
+    "اسم العلامة «dewa» على نطاق غير رسمي",
+    "كلمتا إغراء «bill» و«pay» في العنوان",
+    "تطابق بصري 78% مع صفحة سداد الفواتير الأصلية",
+    "صدرت الشهادة قبل 7 ساعات"
+  ]
+}
