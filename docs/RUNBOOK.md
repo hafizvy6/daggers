@@ -82,7 +82,7 @@ make check            # compileall + i18n/design gate + node syntax + extension 
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `SWEEP_ALLOW_ARBITRARY` | `0` | `1` allows free-text queries (still PII-filtered, 3–120 chars). `0` = canonical queries from `/api/examples` only |
+| `SWEEP_ALLOW_ARBITRARY` | `1` | typed searches allowed (PII-filtered, 3–120 chars, rate-limited). Set `0` = canonical queries from `/api/examples` only — recommended when running a paid search key behind an untrusted public instance |
 | `SWEEP_RATE_PER_MIN` | `6` | per client IP |
 | `SWEEP_MAX_CONCURRENT` | `2` | global in-flight sweeps |
 
@@ -140,7 +140,7 @@ SEARCH_LIVE_ENABLED=1
 MAPS_LIVE_ENABLED=1 GOOGLE_PLACES_API_KEY=...
 ```
 
-Canonical queries live in `backend/app/channels/queries.yaml` and are served at `GET /api/examples`. The PWA pills use those by id. Free-text is rejected with 403 unless `SWEEP_ALLOW_ARBITRARY=1`.
+Canonical queries live in `backend/app/channels/queries.yaml` and are served at `GET /api/examples`. The PWA pills use those by id. Typed searches are accepted by default; operators who prefer a closed proxy set `SWEEP_ALLOW_ARBITRARY=0`, in which case free-text is rejected with 403.
 
 Official-registry verification (authority/scope checks for government and bank domains) is a **human** act:
 
@@ -251,7 +251,7 @@ Rotate any key you suspect leaked by re-issuing it with the provider — nothing
 | Feed is `[]`, counts 0 | Expected with no adapters enabled. Enable §4 one at a time; check `/api/healthz`. |
 | Heartbeats show `-1` | Loop never completed: adapter disabled, or first poll still in flight (`CRT_MIN_QUERY_GAP_S`). |
 | `/api/healthz` shows adapters enabled but no data | Provider outage or empty result set. Check logs; enable `ENRICH_ENABLED` for detail; never paste real victim data to "test". |
-| `403` from `/api/sweep` | Free-text query with `SWEEP_ALLOW_ARBITRARY=0` — pick a canonical pill or set the flag. |
+| `403` from `/api/sweep` | Free-text query while the operator set `SWEEP_ALLOW_ARBITRARY=0` — pick a canonical pill or enable typed search. |
 | `429` from `/api/sweep` | Per-IP rate limit; tune `SWEEP_RATE_PER_MIN`. |
 | `422` on `/api/mode` with `demo` | Correct — demo mode does not exist. Only `live` is accepted. |
 | PWA shows UNAVAILABLE chip | API unreachable/down or offline. Check `web/config.js` `API_BASE` and CORS on the API host. |
