@@ -58,7 +58,7 @@ make check            # compileall + i18n/design gate + node syntax + extension 
 | `CORS_ORIGIN_REGEX` | — | controlled alternative, e.g. `^https://[a-z0-9-]+\.pages\.dev$` |
 | `MALICIOUS_THRESHOLD` / `SUSPICIOUS_THRESHOLD` | `0.65` / `0.35` | verdict cut-offs |
 | `RENDER_SCORE_MIN` | `0.45` | minimum triage score before spending a render |
-| `AUTOFILE_CLONE_MIN` | `90` | clone % required for auto-filed reports |
+| `AUTOFILE_CLONE_MIN` | `90` | clone % sufficient for auto-filed reports; a confirmed phishing-feed match also suffices |
 | `GUARD_BLOCK_MISLEADING` | `0` | `1` also blocks claim-only MISLEADING domains (policy decision) |
 | `GUARD_MAX_AGE_DAYS` | `30` | Guard ignores MALICIOUS rows older than this |
 
@@ -105,7 +105,7 @@ Enable in this order, verifying after each — each stage works with the rest of
 2. **Phishing feeds** — `FEEDS_ENABLED=1`. OpenPhish and URLhaus need no key. For PhishTank, register at phishtank.com, set `PHISHTANK_KEY`, and keep `http_user_agent` identifiable.
 3. **Enrichment** — `ENRICH_ENABLED=1`. Adds RDAP record age (via rdap.org), DNS A records, TLS issuer/first-seen, and a favicon perceptual hash. Timeout-isolated; worst case is missing fields, never a crash.
 4. **Renderer** — `make install-render` (installs imagehash, numpy, opencv-headless, playwright; then `playwright install chromium`; on the slim Docker image add `--with-deps` or use `INSTALL_RENDER=1`). Then `RENDER_ENABLED=1`. The renderer loads pages read-only: no downloads, no form fills, no credential submissions, 15 s hard timeout. **Evidence JPGs appear only from now on**, composed side-by-side against the reference capture.
-5. **Gallery index** — the repo intentionally ships no reference screenshots. Operators build their own: capture the official login page, compute its pHash, and append entries to the gallery index JSON (see `backend/app/vision/gallery.py`; place files in `$GALLERY_DIR` and keep an index at the path it loads). Without this, clone detection reports nothing — honestly.
+5. **Official references** — the repo intentionally ships no reference screenshots. Build real captures on an operator machine with `python ops/capture_reference.py adnoc.ae adcb.ae` or `python ops/capture_reference.py --all-brands`; files stay under `$GALLERY_DIR` as `reference_<host>.jpg`. Without these, clone detection reports nothing — honestly.
 
 Check the loop end-to-end:
 

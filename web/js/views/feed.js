@@ -38,7 +38,7 @@ export default async function Feed(ctx) {
 
   const tabs = [
     { id: "all", key: "feed.filterAll" },
-    { id: "malicious", key: "feed.filterMalicious" },
+    { id: "fake", key: "feed.filterMalicious" },
     { id: "suspicious", key: "feed.filterSuspicious" },
   ];
   const paintTabs = () => {
@@ -68,7 +68,11 @@ export default async function Feed(ctx) {
   }
 
   function paintList(newIds = new Set()) {
-    const shown = findings.filter((f) => filter === "all" || tagFor(f.verdict) === filter);
+    const shown = findings.filter((f) => {
+      if (filter === "all") return true;
+      const tag = tagFor(f.verdict);
+      return filter === "suspicious" ? tag === "warning" || tag === "misleading" : tag === filter;
+    });
     document.getElementById("feedCount") && (document.getElementById("feedCount").textContent = t("feed.count", { n: fmtNum(shown.length) }));
     if (!shown.length) {
       listCard.replaceChildren(emptyState({

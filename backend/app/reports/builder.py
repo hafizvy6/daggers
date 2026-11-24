@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import re
+from collections.abc import Mapping
 from typing import Any
 
 from ..core.verdicts import MALICIOUS
@@ -118,5 +119,20 @@ def build_report(
     return report
 
 
-def autofile_eligible(finding: dict, clone_min: float = 90.0) -> bool:
-    return finding.get("verdict") == MALICIOUS and float(finding.get("clone") or 0) >= clone_min
+def autofile_eligible(
+    finding: dict,
+    clone_min: float = 90.0,
+    confirmed_context: Mapping[str, object] | None = None,
+) -> bool:
+    """Only confirmed fakes may auto-file. A brand token alone is not enough.
+
+    Confirmed means either an operator-established clone of the official page,
+    or a first-party phishing-feed confirmation passed through the radar.
+    Brand-only lexical weight never qualifies for an automatic police report.
+    """
+    if finding.get("verdict") != MALICIOUS:
+        return False
+    if float(finding.get("clone") or 0) >= clone_min:
+        return True
+    context = confirmed_context or {}
+    return bool(context.get("phishtank_confirmed"))

@@ -92,10 +92,13 @@ export default async function Finding(ctx) {
 
   const tl = el("ol", { class: "timeline" });
   const t0 = f.first_seen || new Date().toISOString();
+  const verdictKey = { MALICIOUS: "Fake", SUSPICIOUS: "Warning", MISLEADING: "Misleading" }[f.verdict];
   const steps = [
     { when: t0, what: t("finding.tlDomain"), key: false },
     { when: t0, what: t("finding.tlEnriched"), key: false },
-    { when: t0, what: t("finding.tlFlagged", { verdict: t(`common.tag${f.verdict === "MALICIOUS" ? "Fake" : f.verdict === "SUSPICIOUS" ? "Warning" : "Misleading"}`) }), key: true },
+    verdictKey
+      ? { when: t0, what: t("finding.tlFlagged", { verdict: t(`common.tag${verdictKey}`) }), key: true }
+      : { when: t0, what: t("finding.tlReviewed"), key: false },
   ];
   if (["MALICIOUS"].includes(f.verdict)) steps.push({ when: t0, what: t("finding.tlBlocked"), key: false });
   if (existing) steps.push({ when: existing.filed_at || t0, what: t("finding.tlFiled"), key: false });

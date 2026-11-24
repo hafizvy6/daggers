@@ -49,7 +49,7 @@ async def render_url(
         async with async_playwright() as playwright:
             browser = await playwright.chromium.launch(
                 headless=True,
-                args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+                args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--disable-blink-features=AutomationControlled"],
             )
             try:
                 context = await browser.new_context(
@@ -57,6 +57,7 @@ async def render_url(
                     accept_downloads=False,
                     user_agent=settings.http_user_agent,
                     java_script_enabled=True,
+                    locale="en-AE",
                 )
 
                 async def guard_requests(route) -> None:
@@ -70,9 +71,19 @@ async def render_url(
                 page = await context.new_page()
                 await page.route("**/*", guard_requests)
                 page.set_default_navigation_timeout(timeout)
-                await page.goto(url, wait_until="domcontentloaded", timeout=timeout)
-                await page.wait_for_timeout(2000)
-                await page.screenshot(path=str(screenshot_path), full_page=True, timeout=timeout)
+                try:
+                    await page.goto(url, wait_until="domcontentloaded", timeout=timeout)
+                except Exception:
+                    # Some scams respond late or stream forever. A committed navigation is
+                    # enough to capture the first painted page; a blank success is impossible
+                    # because the subsequent screenshot must succeed.
+                    await page.goto(url, wait_until="commit", timeout=timeout)
+                try:
+                    await page.wait_for_load_state("load", timeout=min(5000, timeout))
+                except Exception:
+                    pass
+                await page.wait_for_timeout(1500)
+                await page.screenshot(path=str(screenshot_path), type="jpeg", quality=90, full_page=False, timeout=timeout)
                 html = await page.content()
                 return RenderResult(
                     enabled=True,
@@ -99,5 +110,9 @@ async def render_for_reference(official_domain: str, settings: Settings) -> Rend
     if not host or "://" in host or "/" in host:
         return RenderResult(enabled=False, error="invalid official domain")
     safe = re.sub(r"[^a-z0-9.-]+", "-", host).strip("-") or "official"
+    for suffix in (".jpg", ".jpeg", ".png"):
+        existing = settings.gallery_dir / f"reference_{safe}{suffix}"
+        if existing.exists():
+            return RenderResult(enabled=True, screenshot_path=str(existing))
     screenshot = settings.gallery_dir / f"reference_{safe}.jpg"
     return await render_url(f"https://{host}/", screenshot, settings=settings)
