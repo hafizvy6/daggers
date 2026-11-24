@@ -174,7 +174,7 @@
     "emptyQuery": "Type a search — a brand, a service, a phrase.",
     "whyLine": "Why: {reason}",
     "scoring": "Checking…",
-    "mapsNote": "We can't paint tags inside Google Maps — nobody can. So we check the listing from our side: name, number, website. Copy any listing's number or website into the Checker any time.",
+    "mapsNote": "Listings come from Google Places with a key, otherwise OpenStreetMap (© OpenStreetMap contributors). We can't paint tags inside the maps itself — nobody can. So we check the listing from our side: name, number, website. Copy any listing's number or website into the Checker any time.",
     "listingName": "Listing",
     "listingPhone": "Phone",
     "listingSite": "Website",
