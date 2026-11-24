@@ -35,12 +35,16 @@ def load_font(size: int, bold: bool = False):
         if Path(candidate).exists():
             try:
                 return ImageFont.truetype(candidate, size=size)
-            except OSError:
+            except Exception:
                 continue
     try:
         return ImageFont.load_default(size=size)
-    except TypeError:  # pragma: no cover - older Pillow
+    except Exception:
+        pass
+    try:
         return ImageFont.load_default()
+    except Exception:
+        return None
 
 
 def perceptual_hash(image) -> str:
@@ -136,31 +140,39 @@ def generate_gallery_images(
     *,
     count: int = 30,
 ) -> list[dict]:
-    """Build 60 offline reference shots and their precomputed perceptual hashes."""
+    """Build 60 offline reference shots and their precomputed perceptual hashes.
+
+    A broken local FreeType/Pillow build, missing font, or unwritable runtime
+    directory must never break cold start: the committed index remains the
+    source of truth for the offline demo.
+    """
     if Image is None:
         return load_gallery(index_path)
-    image_dir.mkdir(parents=True, exist_ok=True)
-    selected = list(brands)[:count]
-    entries: list[dict] = []
-    for brand in selected:
-        token = str(brand.get("token", "brand"))
-        official = str(brand.get("official_domain", f"{token}.ae"))
-        for view, size in (("desktop", (640, 420)), ("mobile", (360, 640))):
-            image = create_official_reference(brand, view, size)
-            assert image is not None
-            filename = f"{token}_{view}.jpg"
-            image.save(image_dir / filename, "JPEG", quality=88)
-            entries.append(
-                {
-                    "id": f"{token}-{view}",
-                    "brand": token,
-                    "official_domain": official,
-                    "url": f"{official}/{'login' if view == 'desktop' else 'home'}",
-                    "view": view,
-                    "phash": perceptual_hash(image),
-                    "path": f"gallery/{filename}",
-                }
-            )
-    index_path.parent.mkdir(parents=True, exist_ok=True)
-    index_path.write_text(json.dumps(entries, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    return entries
+    try:
+        image_dir.mkdir(parents=True, exist_ok=True)
+        selected = list(brands)[:count]
+        entries: list[dict] = []
+        for brand in selected:
+            token = str(brand.get("token", "brand"))
+            official = str(brand.get("official_domain", f"{token}.ae"))
+            for view, size in (("desktop", (640, 420)), ("mobile", (360, 640))):
+                image = create_official_reference(brand, view, size)
+                assert image is not None
+                filename = f"{token}_{view}.jpg"
+                image.save(image_dir / filename, "JPEG", quality=88)
+                entries.append(
+                    {
+                        "id": f"{token}-{view}",
+                        "brand": token,
+                        "official_domain": official,
+                        "url": f"{official}/{'login' if view == 'desktop' else 'home'}",
+                        "view": view,
+                        "phash": perceptual_hash(image),
+                        "path": f"gallery/{filename}",
+                    }
+                )
+        index_path.parent.mkdir(parents=True, exist_ok=True)
+        index_path.write_text(json.dumps(entries, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        return entries
+    except Exception:
+        return load_gallery(index_path)

@@ -4,13 +4,16 @@ httpx==0.28.1
 PyYAML==6.0.2
 tldextract==5.1.3
 idna==3.10
-Pillow==11.0.0
+Pillow==12.3.0
 pytest==8.3.4
 
 # Optional renderer/vision stack — intentionally not installed by default.
-# `make install-render` and Docker's INSTALL_RENDER=1 install these inline:
+# `make install-render` and Docker's INSTALL_RENDER=1 install these inline.
+# Pillow 12.3.0 is deliberate: it ships Python 3.15 wheels, avoiding a local
+# source build against a broken Homebrew FreeType (libhvf.dylib) on macOS.
 # imagehash==4.3.2
-# numpy==2.1.3
-# opencv-python-headless==4.10.0.84
-# playwright==1.49.1
+# numpy==2.1.3        # Python 3.11
+# numpy==2.5.5        # Python 3.12+
+# opencv-python-headless==5.1.0.95
+# playwright==1.65.2
 # pytesseract==0.3.13

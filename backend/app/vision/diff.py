@@ -196,35 +196,41 @@ def ensure_evidence_image(finding: dict, destination: Path, gallery_dir: Path | 
     if Image is None or ImageDraw is None:
         return _copy_fallback(destination)
 
-    from .gallery import create_official_reference, load_gallery
+    try:
+        from .gallery import create_official_reference, load_gallery
 
-    gallery = load_gallery(_gallery_index_path())
-    gallery_match = str(finding.get("gallery_match") or "")
-    entry = next(
-        (
-            item
-            for item in gallery
-            if item.get("url") == gallery_match
-            or str(item.get("official_domain", "")) in gallery_match
-        ),
-        None,
-    )
-    official_image = None
-    if entry and gallery_dir:
-        candidate = Path(gallery_dir) / Path(str(entry.get("path", ""))).name
-        if candidate.exists():
-            try:
-                official_image = Image.open(candidate).convert("RGB")
-            except OSError:
-                official_image = None
-    if official_image is None:
-        brand = entry or {
-            "token": str(finding.get("domain", "brand")).split(".")[0],
-            "official_domain": gallery_match.split("/")[0] or "official.example",
-        }
-        official_image = create_official_reference(brand, "desktop", (700, 400))
-    suspect_image = _create_suspect_reference(finding, (700, 400))
-    return _compose_evidence(finding, official_image, suspect_image, destination)
+        gallery = load_gallery(_gallery_index_path())
+        gallery_match = str(finding.get("gallery_match") or "")
+        entry = next(
+            (
+                item
+                for item in gallery
+                if item.get("url") == gallery_match
+                or str(item.get("official_domain", "")) in gallery_match
+            ),
+            None,
+        )
+        official_image = None
+        if entry and gallery_dir:
+            candidate = Path(gallery_dir) / Path(str(entry.get("path", ""))).name
+            if candidate.exists():
+                try:
+                    official_image = Image.open(candidate).convert("RGB")
+                except OSError:
+                    official_image = None
+        if official_image is None:
+            brand = entry or {
+                "token": str(finding.get("domain", "brand")).split(".")[0],
+                "official_domain": gallery_match.split("/")[0] or "official.example",
+            }
+            official_image = create_official_reference(brand, "desktop", (700, 400))
+        suspect_image = _create_suspect_reference(finding, (700, 400))
+        composed = _compose_evidence(finding, official_image, suspect_image, destination)
+        if composed is not None:
+            return composed
+    except Exception:
+        pass
+    return _copy_fallback(destination)
 
 
 def create_comparison_evidence(

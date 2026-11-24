@@ -1,9 +1,11 @@
 PYTHON ?= $(shell if [ -x .venv/bin/python ]; then echo .venv/bin/python; else echo python3; fi)
+BOOTSTRAP_PYTHON ?= $(shell for p in python3.11 python3.12 python3.13 python3.14 python3; do command -v $$p >/dev/null 2>&1 && { echo $$p; break; }; done)
+NUMPY_PIN = $(shell $(PYTHON) -c 'import sys; print("numpy==2.5.5" if sys.version_info >= (3, 12) else "numpy==2.1.3")')
 PORT ?= 8000
 HOST ?= 0.0.0.0
 export PYTHONPATH := $(CURDIR)
 
-OPTIONAL_RENDER_PKGS = imagehash==4.3.2 numpy==2.1.3 opencv-python-headless==4.10.0.84 playwright==1.49.1 pytesseract==0.3.13
+OPTIONAL_RENDER_PKGS = imagehash==4.3.2 $(NUMPY_PIN) opencv-python-headless==5.1.0.95 playwright==1.65.2 pytesseract==0.3.13
 
 .PHONY: help bootstrap install install-render seed gallery dev demo test check clean deploy snapshot
 
@@ -11,7 +13,11 @@ help:
 	@echo "Daggers WS1: bootstrap · seed · dev · demo · test · check · gallery · deploy"
 
 bootstrap:
-	python3 -m venv .venv
+	@test -n "$(BOOTSTRAP_PYTHON)" || { echo "Python 3.11+ is required"; exit 1; }
+	@$(BOOTSTRAP_PYTHON) -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else "Python 3.11+ is required")'
+	@echo "Bootstrapping with $(BOOTSTRAP_PYTHON)"
+	rm -rf .venv
+	$(BOOTSTRAP_PYTHON) -m venv .venv
 	.venv/bin/pip install --disable-pip-version-check -r requirements.txt
 
 install:
