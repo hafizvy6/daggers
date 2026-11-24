@@ -185,7 +185,7 @@ class Settings:
             enrich_enabled=_bool("ENRICH_ENABLED", False, env),
             search_live_enabled=_bool("SEARCH_LIVE_ENABLED", False, env),
             maps_live_enabled=_bool("MAPS_LIVE_ENABLED", False, env),
-            sweep_allow_arbitrary=_bool("SWEEP_ALLOW_ARBITRARY", False, env),
+            sweep_allow_arbitrary=_bool("SWEEP_ALLOW_ARBITRARY", True, env),
             sweep_rate_per_min=max(1, _int("SWEEP_RATE_PER_MIN", 6, env)),
             sweep_max_concurrent=max(1, _int("SWEEP_MAX_CONCURRENT", 2, env)),
             guard_max_age_days=max(1, _int("GUARD_MAX_AGE_DAYS", 30, env)),

@@ -131,7 +131,7 @@ data: {"id":1, ...}
 
 - `404` for unknown finding/evidence/report/sweep ids.
 - Pydantic `422` for invalid `kind`, `lang`, mode, channel, or status.
-- `403` when `POST /api/sweep` is sent a free-text query but `SWEEP_ALLOW_ARBITRARY=0`. The default path accepts the server's canonical queries (`/api/examples`) only.
+- `403` when `POST /api/sweep` is sent a free-text query and the operator set `SWEEP_ALLOW_ARBITRARY=0`. By default typed searches are accepted (PII-filtered, rate-limited); the canonical path (`/api/examples`) always works.
 - `429` when the sweep per-IP rate limit (`SWEEP_RATE_PER_MIN`, default 6/min) or the concurrency cap (`SWEEP_MAX_CONCURRENT`) is exceeded.
 - `limit` on `/api/feed` is clamped by validation to 1–200.
 - Exact C1/C2/C4/C6 JSON is normalized in `db/repo.py` and `reports/builder.py`; no internal normalization fields leak into contracts.

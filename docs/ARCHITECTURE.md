@@ -46,7 +46,7 @@ One Python 3.11+ FastAPI process serves REST, SSE, the static `web/` PWA, static
 
 1. **Radar**: CT row → normalize → enrichment → triage → `core.scorer` → *(optional) real evidence JPG* → finding → SSE → automatic portal dossier → Guard JSONL. Disabled by default; enable per adapter flag.
 2. **Checker**: `POST /api/scan` → URL/text/number rules → exact `ScanResult`. No network call; the input is echoed, never persisted.
-3. **Sweep**: `POST /api/sweep` with a canonical `query_id` (or a free-text query when `SWEEP_ALLOW_ARBITRARY=1`) → Search/Maps adapter → same brain → rows persisted, `source_kind` honestly `live` or `unconfigured`.
+3. **Sweep**: `POST /api/sweep` with a canonical `query_id` (or a typed query — allowed by default, refused with 403 when an operator sets `SWEEP_ALLOW_ARBITRARY=0`) → Search/Maps adapter → same brain → rows persisted, `source_kind` honestly `live` or `unconfigured`.
 4. **Report → AI**: `reports/builder.py` builds the C4 evidence bundle from a C1 Finding. `api/ai.py` streams an explanation built solely from that bundle; AI never writes `verdict`, `score`, or `reasons`.
 5. **Guard**: `GET /api/guard/feed` emits one policy-filtered JSONL row per confirmed fake; `guard/sync_nextdns.py` pushes them to NextDNS when an operator runs it with a key and profile.
 
@@ -56,7 +56,7 @@ One Python 3.11+ FastAPI process serves REST, SSE, the static `web/` PWA, static
 - crt.sh politeness: at most one query per `CRT_MIN_QUERY_GAP_S` (default 20s), custom `Daggers-Research/1.0` UA, and a poll loop.
 - Every adapter failure returns an empty artifact instead of breaking a finding; findings are never synthesized to fill a gap.
 - `RENDER_ENABLED=0` keeps evidence absent rather than simulated. `RENDER_ENABLED=1` requires `make install-render` and still produces only real captures.
-- Sweep free-text is refused unless `SWEEP_ALLOW_ARBITRARY=1`, preventing the endpoint from becoming an open proxy.
+- Sweep typed queries are PII-filtered, length-capped and rate-limited per IP; an operator can set `SWEEP_ALLOW_ARBITRARY=0` to restrict the endpoint to canonical queries (recommended behind a paid search key).
 
 ## Security and privacy
 
