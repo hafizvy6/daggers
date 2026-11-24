@@ -2,7 +2,7 @@
    Side-by-side evidence, reason chips, score breakdown, facts, timeline,
    FILE REPORT → reports API → toast "We got you." */
 import { t, timeAgo, fmtDateTime, localized, reasonsOf } from "../i18n/i18n.js";
-import { getFinding, fileReport, getReports, tagFor } from "../api.js";
+import { getFinding, fileReport, getReports, setFindingLabel, tagFor } from "../api.js";
 import { el, tagChip, chip, reasonChip, breakdown } from "../components/tag.js";
 import { evidenceFrame } from "../components/evidence.js";
 import { toastFiled } from "../components/toast.js";
@@ -79,6 +79,9 @@ export default async function Finding(ctx) {
     right.append(card(t("finding.breakdownTitle"), "", breakdown(f.signals.map((x) => ({ ...x, label: localized(x, "label") || x.label })))));
   }
 
+  const labelCard = analystLabelCard(f);
+  right.append(labelCard);
+
   /* facts + timeline */
   const factsCard = card(t("finding.factsTitle"), t("finding.kickerEnrich"), kv([
     [t("common.domain"), el("span", { class: "ltr", text: f.domain })],
@@ -151,6 +154,48 @@ export default async function Finding(ctx) {
   root.append(reportCard);
 
   return root;
+}
+
+function analystLabelCard(finding) {
+  const status = el("p", { class: "muted", style: "font-size:var(--fs-sm); margin-block-end:var(--s2)", text: t("finding.labelNote") });
+  const current = finding?.analyst_label?.label || null;
+  const currentLine = el("p", { class: "mono", style: "font-size:var(--fs-xs); margin-block-start:var(--s2)", text: current ? t("finding.labelCurrent", { label: t(`finding.label${labelKey(current)}`) }) : t("finding.labelUnset") });
+  const buttons = el("div", { class: "chips", role: "group", "aria-label": t("finding.labelTitle") });
+  const feedback = el("p", { class: "muted", style: "font-size:var(--fs-xs); margin-block-start:var(--s2)", text: "" });
+  const labels = ["official", "scam", "unrelated", "parked"];
+  const paint = (active) => {
+    for (const button of buttons.querySelectorAll("button")) {
+      button.setAttribute("aria-pressed", String(button.dataset.label === active));
+      button.classList.toggle("btn-primary", button.dataset.label === active);
+      button.classList.toggle("btn-ghost", button.dataset.label !== active);
+    }
+    currentLine.textContent = active ? t("finding.labelCurrent", { label: t(`finding.label${labelKey(active)}`) }) : t("finding.labelUnset");
+  };
+  for (const label of labels) {
+    const button = el("button", { class: `btn btn-sm ${label === current ? "btn-primary" : "btn-ghost"}`, "data-label": label, "aria-pressed": String(label === current), text: t(`finding.label${labelKey(label)}`) });
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      feedback.textContent = t("finding.labelSaving");
+      try {
+        await setFindingLabel(finding.id, label);
+        paint(label);
+        finding.analyst_label = { label };
+        feedback.textContent = ["official", "unrelated", "parked"].includes(label)
+          ? t("finding.labelSuppressed")
+          : t("finding.labelMarked");
+      } catch {
+        feedback.textContent = t("finding.labelSaveFailed");
+      } finally {
+        button.disabled = false;
+      }
+    });
+    buttons.append(button);
+  }
+  return card(t("finding.labelTitle"), t("finding.labelKicker"), status, buttons, currentLine, feedback);
+}
+
+function labelKey(label) {
+  return String(label || "").replace(/^[a-z]/, (char) => char.toUpperCase());
 }
 
 function TAGS_HINT(tagKey) {

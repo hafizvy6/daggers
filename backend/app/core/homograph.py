@@ -120,9 +120,11 @@ def host_forms(host: str) -> dict[str, object]:
 
 
 def confusable_fold(text: str) -> str:
-    normalized = unicodedata.normalize("NFKC", text or "").casefold()
+    normalized = unicodedata.normalize("NFKD", text or "").casefold()
     folded_chars: list[str] = []
     for char in normalized:
+        if unicodedata.combining(char):
+            continue
         folded_chars.append(CONFUSABLES.get(char, char))
     return "".join(folded_chars)
 

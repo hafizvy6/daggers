@@ -22,6 +22,19 @@ def test_official_subdomain_is_clean(scoring_kwargs):
     assert result.score == 0.0
 
 
+def test_high_signal_compound_brand_forms_are_suspicious(scoring_kwargs):
+    for url in (
+        "https://fabbank.mobi/",
+        "https://adcblogin.com/",
+        "https://bankfab-login.com/",
+        "https://emiratesnbdlogin.com/",
+    ):
+        result = score(url, scoring_kwargs)
+        assert result.verdict == "SUSPICIOUS", url
+        assert result.brand_hit is True
+        assert result.score < 0.65
+
+
 def test_brand_only_domain_is_suspicious_not_malicious(scoring_kwargs):
     result = score("https://adnoc-dist.co.ae/", scoring_kwargs)
     assert result.verdict == "SUSPICIOUS"

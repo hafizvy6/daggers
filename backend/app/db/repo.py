@@ -121,6 +121,13 @@ class Repository:
                 }
                 if "detail" not in columns:
                     self._conn.execute("ALTER TABLE sweep_results ADD COLUMN detail TEXT")
+                self._conn.executescript("""
+                CREATE TABLE IF NOT EXISTS analyst_labels (
+                    domain          TEXT PRIMARY KEY,
+                    label           TEXT NOT NULL CHECK(label IN ('official', 'scam', 'unrelated', 'parked')),
+                    updated_at      TEXT NOT NULL
+                );
+                """)
                 self._conn.commit()
         return missing
 
@@ -222,10 +229,53 @@ class Repository:
             row = self.conn.execute("SELECT * FROM domains WHERE domain = ?", (domain.lower(),)).fetchone()
         return dict(row) if row else None
 
+    ANALYST_LABELS = {"official", "scam", "unrelated", "parked"}
+    SUPPRESSED_LABELS = {"official", "unrelated", "parked"}
+
+    def set_analyst_label(self, domain: str, label: str) -> dict:
+        clean = self._clean_domain(domain)
+        normalized = str(label or "").strip().lower()
+        if normalized not in self.ANALYST_LABELS:
+            raise ValueError(f"invalid analyst label: {label}")
+        now = utc_now()
+        with self._lock, self.conn:
+            self.conn.execute(
+                "INSERT INTO analyst_labels(domain, label, updated_at) VALUES(?, ?, ?) "
+                "ON CONFLICT(domain) DO UPDATE SET label = excluded.label, updated_at = excluded.updated_at",
+                (clean, normalized, now),
+            )
+        return {"domain": clean, "label": normalized, "updated_at": now}
+
+    def get_analyst_label(self, domain: str) -> dict | None:
+        clean = self._clean_domain(domain)
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT domain, label, updated_at FROM analyst_labels WHERE domain = ?",
+                (clean,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def analyst_label_stats(self) -> dict[str, int]:
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT label, COUNT(*) AS n FROM analyst_labels GROUP BY label"
+            ).fetchall()
+        counts = {str(row["label"]): int(row["n"]) for row in rows}
+        return {label: counts.get(label, 0) for label in sorted(self.ANALYST_LABELS)}
+
+    def _clean_domain(self, domain: str) -> str:
+        clean = str(domain or "").strip().lower().rstrip(".")
+        if not clean or "/" in clean or "://" in clean or " ".join(clean.split()) != clean:
+            raise ValueError("invalid domain")
+        return clean
+
     def unprocessed_domains(self, limit: int = 20) -> list[dict]:
         with self._lock:
             rows = self.conn.execute(
-                "SELECT * FROM domains WHERE enqueued = 0 ORDER BY first_seen ASC LIMIT ?",
+                "SELECT d.* FROM domains d "
+                "LEFT JOIN analyst_labels al ON al.domain = d.domain "
+                "WHERE d.enqueued = 0 AND COALESCE(al.label, '') NOT IN ('official', 'unrelated', 'parked') "
+                "ORDER BY d.first_seen ASC LIMIT ?",
                 (int(limit),),
             ).fetchall()
         return [dict(row) for row in rows]
@@ -266,8 +316,23 @@ class Repository:
             ).fetchone()
         return self._row_to_finding(row) if row else None
 
-    def get_findings(self, limit: int = 50) -> list[dict]:
+    def get_findings(
+        self,
+        limit: int = 50,
+        *,
+        min_score: float | None = None,
+        include_unknown: bool = False,
+        include_suppressed: bool = False,
+    ) -> list[dict]:
         limit = max(1, min(int(limit), 200))
+        clauses: list[str] = []
+        params: list[object] = []
+        if not include_unknown:
+            clauses.append("f.verdict != 'UNKNOWN' AND f.score >= ?")
+            params.append(float(min_score if min_score is not None else 0.35))
+        if not include_suppressed:
+            clauses.append("COALESCE(al.label, '') NOT IN ('official', 'unrelated', 'parked')")
+        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
         with self._lock:
             rows = self.conn.execute(
                 "SELECT f.id, d.domain, f.verdict, f.score, f.reasons, "
@@ -275,8 +340,10 @@ class Repository:
                 "COALESCE(f.clone_score, 0) AS clone, f.evidence_path AS evidence_url, "
                 "f.gallery_match, f.is_case_file "
                 "FROM findings f JOIN domains d ON d.id = f.domain_id "
+                "LEFT JOIN analyst_labels al ON al.domain = d.domain "
+                f"{where} "
                 "ORDER BY f.created_at DESC, f.id DESC LIMIT ?",
-                (limit,),
+                (*params, limit),
             ).fetchall()
         return [self._row_to_finding(row) for row in rows]
 

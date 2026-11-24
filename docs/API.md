@@ -10,8 +10,10 @@ Interactive OpenAPI is served at `/docs`; the machine schema is at `/openapi.jso
 | GET | `/api/mode` | — | `{"mode":"live"}` |
 | POST | `/api/mode` | `{"mode":"live"}` | `{"mode":"live"}` (anything else → 422) |
 | GET | `/api/healthz` | — | `{ok, mode, adapters{}}` — no secrets |
-| GET | `/api/feed?limit=50` | `limit` 1–200 | `[Finding]` newest first |
+| GET | `/api/feed?limit=50&min_score=0.35` | `limit` 1–200; `include_unknown=true` + `include_suppressed=true` for analyst view | `[Finding]` newest first; CT-only `UNKNOWN` and analyst-suppressed domains hidden by default |
 | GET | `/api/finding/{id}` | — | `Finding` or 404 |
+| GET | `/api/finding/{id}/label` | — | `{"domain":…,"label":"official|scam|unrelated|parked"|"label":null …}` |
+| POST | `/api/finding/{id}/label` | `{"label":"official|scam|unrelated|parked"}` | latest analyst label; official/unrelated/parked are suppressed from the default feed |
 | GET | `/api/evidence/{id}.jpg` | — | real captured JPEG or 404 |
 | GET | `/evidence/{id}.jpg` | — | same JPEG via static mount |
 | POST | `/api/scan` | `ScanRequest` | `ScanResult` |
