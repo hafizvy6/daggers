@@ -1,6 +1,6 @@
 /* Daggers · Portal — the police dashboard (plan Scenario 7).
    Reports table · detail pane · AI Analysis streams EN → AR toggle →
-   takedown letter. THIS is the demo centerpiece. */
+   takedown letter. Evidence-only; no canned cases. */
 import { t, fmtNum, fmtDateTime, timeAgo, getLang, reasonsOf } from "../i18n/i18n.js";
 import { getReports, advanceReport, streamAnalysis, getTakedown, tagFor, state } from "../api.js";
 import { el, tagChip, chip, reasonChip } from "../components/tag.js";

@@ -1,19 +1,20 @@
-# Daggers Guard (WS2)
+# Daggers Guard
 
-Guard turns WS1's confirmed findings into a DNS blocklist.
+Guard turns confirmed radar findings into a DNS blocklist. It is integrated into the single backend — no second service.
 
-| Endpoint | Owner | Purpose |
-|---|---|---|
-| `GET /api/guard/feed` | WS1 | JSONL `GuardRow` source of truth (unchanged) |
-| `GET /api/guard/stats` | WS1 | blocked domains / hits (unchanged) |
-| `GET /api/guard/blocklist.txt?format=hosts\|domains` | WS2 | hosts file (`0.0.0.0 domain`) or bare domains |
-| `GET /api/guard/sync-status` | WS2 | last sync, counts, exclusions, errors |
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/guard/feed` | JSONL `GuardRow` source of truth |
+| `GET /api/guard/stats` | blocked domains / hits (plus `blocked_today`, `feed_size`) |
+| `GET /api/guard/blocklist.txt?format=hosts\|domains` | hosts file (`0.0.0.0 domain`) or bare domains |
+| `GET /api/guard/sync-status` | last sync, counts, exclusions, errors |
+| `GET /api/guard/config` | Private DNS hostname for the PWA (from `NEXTDNS_DNS_HOSTNAME` or `NEXTDNS_PROFILE`) |
 
-**Blocked:** only `MALICIOUS` rows from WS1's feed, valid DNS names, flagged within
-`GUARD_MAX_AGE_DAYS` (default 30), never an official-registry or WS1-allowlisted domain.
-**Never blocked:** unknown domains, WARNING, MISLEADING (even with WS1's
-`GUARD_BLOCK_MISLEADING=1`), unverified reports. If WS1's feed fails, the last good list is
-served and `sync-status` reports `stale`.
+**Blocked:** only `MALICIOUS` rows from the backend's Guard feed, valid DNS names, flagged within
+`GUARD_MAX_AGE_DAYS` (default 30), never an official-registry or allowlisted domain.
+**Never blocked:** unknown domains, WARNING, MISLEADING (even with `GUARD_BLOCK_MISLEADING=1`),
+unverified reports. If the feed cannot be read, the last good list is served and
+`sync-status` reports `stale`. With an empty database the list is empty — not a sample.
 
 ## NextDNS
 
@@ -23,9 +24,11 @@ served and `sync-status` reports `stale`.
 
 Alternatively paste `…/blocklist.txt?format=domains` into the profile's denylist by hand.
 
-### Limits — read before demoing
-* The script was **not** run against the live NextDNS API from the WS2 build environment.
-* WS2 does not read NextDNS analytics. Free-tier logging/analytics retention is limited and
+### Limits — read before relying on it
+* The script should be validated against your own NextDNS profile before unattended use.
+* Daggers does not read NextDNS analytics. Free-tier logging/analytics retention is limited and
   block events are **not measured** by Daggers; `sync-status` always reports
   `block_events_measured: false`. Never present a block count as measured unless it came from
   the provider's own dashboard.
+* The NextDNS API key lives only on the machine running `sync_nextdns.py`. Never ship it to the
+  browser, the PWA, the extension, or your deployment environment beyond that operator machine.

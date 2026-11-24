@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""WS3 gate 1 — no hardcoded user-visible strings; EN/AR key parity.
+"""Daggers gate 1 — no hardcoded user-visible strings; EN/AR key parity.
 
 Fails (exit 1) if:
   · a views/components file contains user-facing English text in the DOM API
@@ -74,11 +74,11 @@ for f in sorted((WEB / "js").rglob("*.js")):
             if k not in fen:
                 fail.append(f"{f.relative_to(ROOT)}:{i}: t(\"{k}\") missing from en.json")
 
-# ---- no hardcoded demo data in UI code (payloads must come from fixtures) ----
+# ---- no hardcoded case data in live UI code ----
 DATA_PAT = [
     re.compile(r'https?://(?!localhost|127\.0\.0\.1|<)[a-zA-Z0-9.-]+'),   # absolute URLs
     re.compile(r'"\+971[\s0-9X-]{6,}"'),                                   # phone literals
-    re.compile(r'"[^"]*\.(xyz|top|click|info|support|award)\b[^"]*"'),      # demo domains
+    re.compile(r'"[^"]*\.(xyz|top|click|info|support|award)\b[^"]*"'),      # real-world bait domains
 ]
 for f in sorted((WEB / "js").rglob("*.js")):
     for i, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
@@ -90,21 +90,22 @@ for f in sorted((WEB / "js").rglob("*.js")):
         for pat in DATA_PAT:
             m = pat.search(line)
             if m:
-                fail.append(f"{f.relative_to(ROOT)}:{i}: hardcoded demo data → {m.group(0)[:50]}"
-                            f"  (move it into web/fixtures/)")
+                fail.append(f"{f.relative_to(ROOT)}:{i}: hardcoded case data → {m.group(0)[:50]}"
+                            f"  (live UI must not invent product data)")
 
-# ---- WS3 boundary: files the brief assigns to other lanes must not exist here ----
-FORBIDDEN = ["backend/app/main.py", "backend/app/config.py", "Dockerfile", "Makefile",
-             "backend/run.sh", ".env"]
+# ---- production gate: no demo/seed/fixture data in product runtime ----
+FORBIDDEN = [
+    "backend/seed",
+    "web/fixtures",
+    "web/evidence",
+    "ops/demo",
+    "backend/app/channels/fixtures",
+    "backend/app/channels/official/fixtures",
+    "backend/app/channels/ws2.env.example",
+]
 for rel in FORBIDDEN:
     if (ROOT / rel).exists():
-        fail.append(f"{rel}: owned by another lane / not in the WS3 file list — remove it")
-
-seed = ROOT / "backend" / "seed" / "fixtures"
-if seed.exists():
-    extra = {f.name for f in seed.glob("*.json")} - {"feed.json", "reports.json", "status.json"}
-    if extra:
-        fail.append(f"backend/seed/fixtures: only feed/reports/status belong to WS3, found {sorted(extra)}")
+        fail.append(f"{rel}: demo/seed data is not allowed in the live product runtime")
 
 # every prompt the AI uses must exist (brief §3 lists four + the template skeletons
 # that make the fallback path data-driven instead of hardcoded Python strings)

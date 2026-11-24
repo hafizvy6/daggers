@@ -9,7 +9,7 @@ router = APIRouter()
 
 
 class ModeRequest(BaseModel):
-    mode: Literal["live", "demo"]
+    mode: Literal["live"]
 
 
 @router.get("/api/status")
@@ -30,4 +30,9 @@ async def set_mode(payload: ModeRequest, request: Request):
 @router.get("/api/healthz")
 async def healthz(request: Request):
     runtime = request.app.state.runtime
-    return {"ok": True, "mode": runtime.mode, "uptime_s": runtime.uptime_s()}
+    return {
+        "ok": True,
+        "mode": runtime.mode,
+        "uptime_s": runtime.uptime_s(),
+        "adapters": runtime.adapter_status(),
+    }

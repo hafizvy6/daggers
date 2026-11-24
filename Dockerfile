@@ -3,14 +3,7 @@ FROM python:3.11-slim
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app \
-    MODE=demo \
-    DEMO_MODE=1 \
-    RENDER_ENABLED=0 \
-    CRT_ENABLED=0 \
-    FEEDS_ENABLED=0 \
-    ENRICH_ENABLED=0 \
-    SWEEP_ALLOW_ARBITRARY=1 \
-    AI_PROVIDER=template \
+    APP_ENV=production \
     PORT=8000
 
 WORKDIR /app
@@ -18,7 +11,7 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# The HF Space CPU image can skip Chromium entirely with INSTALL_RENDER=0.
+# Optional renderer/vision stack. Enable with --build-arg INSTALL_RENDER=1.
 ARG INSTALL_RENDER=0
 RUN if [ "$INSTALL_RENDER" = "1" ]; then \
         pip install --no-cache-dir \
@@ -31,8 +24,8 @@ RUN if [ "$INSTALL_RENDER" = "1" ]; then \
     fi
 
 COPY . .
-RUN mkdir -p /app/backend/data/evidence /app/backend/data/gallery && \
-    python -m backend.seed.seed --seed-only
+# Runtime directories are empty by default. No product data is seeded.
+RUN mkdir -p /app/backend/data/evidence /app/backend/data/gallery
 
 EXPOSE 8000
 

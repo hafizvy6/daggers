@@ -1,4 +1,4 @@
-/* Daggers · Feed — the radar (plan Scenario 6). Live SSE prepend + NEW glow. */
+/* Daggers · Feed — live radar, honest empty state, SSE prepend + NEW glow. */
 import { t, timeAgo, fmtNum } from "../i18n/i18n.js";
 import { getFeed, onState, tagFor, state } from "../api.js";
 import { el, tagChip, dot, scoreBar, TAGS } from "../components/tag.js";
@@ -16,7 +16,7 @@ export default async function Feed(ctx) {
     subtitle: t("feed.subtitle"),
     actions: [el("span", { class: "chip", title: t("feed.liveNote") },
       el("span", { class: "chip-k", text: "●" }),
-      el("span", { class: "mono", text: state.demo || state.apiDown ? t("top.modeDemo") : t("top.live") }))],
+      el("span", { class: "mono", text: state.apiDown || state.offline ? t("top.down") : t("top.live") }))],
   }));
 
   const filterHost = el("div", { class: "tabs", role: "tablist", "aria-label": t("feed.title") });
@@ -103,7 +103,6 @@ export default async function Feed(ctx) {
     paintList(new Set([finding.id]));
   };
   ctx.app.streamHooks.push(hook);
-  if (ctx.app.armDemoBeat) ctx.app.armDemoBeat();
   root._cleanup = () => {
     const i = ctx.app.streamHooks.indexOf(hook);
     if (i >= 0) ctx.app.streamHooks.splice(i, 1);

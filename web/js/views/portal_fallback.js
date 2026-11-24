@@ -1,5 +1,5 @@
 /* Daggers · template fallback for the AI panel (identical UI shape).
-   Used when the stream dies mid-way — the demo never breaks.
+   Used when the stream dies mid-way — the UI shape stays intact.
    All prose lives in the catalogs (portal.fallback.*); this file only fills slots.
    The backend template (backend/app/ai/fallback.py) is the other half of the same rule. */
 import { t, localized, reasonsOf } from "../i18n/i18n.js";

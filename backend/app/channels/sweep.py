@@ -171,7 +171,12 @@ class SweepService:
         if run is None:
             return None
         rows = run.pop("results", [])
-        kind = rows[0]["source_kind"] if rows else ("fixture" if run.get("engine") == "fixture" else "live")
+        if rows:
+            kind = rows[0]["source_kind"]
+        elif run.get("engine") == "none":
+            kind = "unconfigured"
+        else:
+            kind = "unavailable"
         return self._response(run, rows, kind, [], run.get("query_id"))
 
     def _response(self, meta: dict, rows: list[dict], kind: str, errors: list[str], query_id) -> dict:
@@ -184,7 +189,7 @@ class SweepService:
             "engine": meta["engine"],
             "cached": bool(meta["cached"]),
             "source_kind": kind,
-            "synthetic": kind == "fixture",
+            "synthetic": False,
             "created_at": meta["created_at"],
             "store": self.store.backend,
             "counts": _counts([r["tag"] for r in rows]),
@@ -219,6 +224,6 @@ class SweepService:
             "domain_auth": website.get("domain_auth"), "gov_verification": None,
             "trust_reasons": list(website.get("trust_reasons") or []),
             "blockable": item["blockable"],
-            "source_kind": "fixture" if listing["is_synthetic"] else "live",
+            "source_kind": listing.get("source_kind") or "live",
             "maps": {"listing": listing, "checks": checks},
         }

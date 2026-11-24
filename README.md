@@ -1,56 +1,47 @@
-# Daggers — Integrated Brain, Shield & Face
+# Daggers — We catch it, we prove it, we report it.
 
-> **We catch it, we prove it, we report it.** Daggers protects people from scam websites, messages, and numbers and files confirmed scams with evidence. This checkout combines **WS1** (deterministic brain, radar, evidence, SQLite, exact core contracts), **WS2** (Guard, Sweep, Search/Maps adapters, extension), and **WS3** (bilingual PWA, portal, demo ops, AI Analyst) in one FastAPI process.
+Daggers protects people from scam websites, messages, and phone numbers — and files confirmed scams with zero-PII evidence. One deterministic Python brain scores every surface (URL, pasted message, number, search result, Maps listing, new certificate), the same engine behind the bilingual PWA, the Guard DNS blocklist, the Chrome extension, and the police-report portal.
 
-The deterministic `core/` engine remains the single source of truth. WS2 calls it in-process and consumes `/api/guard/feed`; WS3 renders its C1–C5 contracts and may stream explanations, but AI never writes `verdict`, `score`, or `reasons`. `main.py` mounts WS2/WS3 routers and serves `web/` statically.
-
----
-
-## 30-second pitch
-
-One brain powers every surface. A URL, pasted message, phone number, search result, Maps listing, or new certificate is normalized and scored by the **same pure Python core**. Every non-zero signal becomes a human-readable `reasons[]` line. Confirmed visual clones auto-create a **zero-PII police report**. AI may explain the evidence later; it never writes `verdict`, `score`, or `reasons`.
+There is **no demo mode and no seed data**. A cold start against an empty database is a valid, honest state: the radar shows "watching — nothing observed yet", and every adapter stays disabled until you explicitly enable and configure it. Nothing is fabricated, replayed, or re-seeded behind your back.
 
 ---
 
-## Quickstart (<60 seconds cold)
+## Quickstart
 
-Prerequisite: **Python 3.11+**. `make bootstrap` prefers `python3.11`–`python3.14` when available, deletes any stale `.venv`, and installs pinned wheels; Python 3.15 is also supported by the pinned `Pillow==12.3.0` wheel.
+Prerequisite: **Python 3.11+** and, for the full test suite, Node 18+.
 
 ```bash
-make bootstrap       # creates .venv and installs pinned lightweight deps
-make seed            # SQLite WAL + committed 60-entry gallery index + 4 readable evidence JPGs
-make demo            # DEMO_MODE=1, fully alive offline on :8000
+make bootstrap       # create .venv and install pinned wheels
+cp .env.example .env # optional — every default is safe and disabled
+make dev             # live app on :8000 (SQLite at backend/data/daggers.db)
 ```
-
-If an older checkout created a Python 3.15 venv with `Pillow==11.0.0`, simply rerun `make bootstrap` after pulling; it recreates the venv. No manual `libhvf.dylib` or Homebrew FreeType fix is needed.
 
 Then:
 
 ```bash
-curl http://localhost:8000/api/status
-curl http://localhost:8000/api/feed?limit=5
+curl http://localhost:8000/api/healthz          # adapter readiness, no secrets
+curl http://localhost:8000/api/status           # honest zero counts on a cold start
 curl -X POST http://localhost:8000/api/scan \
   -H 'Content-Type: application/json' \
   -d '{"kind":"url","input":"https://adcb-secure-login.xyz/login","lang":"en"}'
-open http://localhost:8000/docs
+open http://localhost:8000/docs                 # OpenAPI
 ```
 
-The integrated build also serves the bilingual WS3 PWA at `http://localhost:8000/`. Use `http://localhost:8000/?mode=demo#/feed` for the fully offline UI story; `/docs` remains the machine-readable API entry point.
+The app serves the bilingual PWA at `http://localhost:8000/`. `/api/mode` always returns `live`. See **[docs/RUNBOOK.md](docs/RUNBOOK.md)** for the full operator guide — enabling live adapters, API keys, Docker, Cloudflare Pages, Hugging Face Spaces, NextDNS, the extension, and the official-registry approval flow.
 
-Use `make dev` for live tables with external pollers still disabled, `make test` for the brain/API suite, `make gallery` to regenerate the committed 60-shot perceptual-hash index, and `make check` for compile + tests.
-
-No API key, browser binary, GPU, or venue network is required for the demo.
+No key, browser, GPU, or network is required to *boot*. External data only flows when you turn an adapter on.
 
 ---
 
 ## Architecture
 
 ```text
-PUBLIC ADAPTERS (opt-in)                BACKEND — one FastAPI process (:8000)
-crt.sh · OpenPhish · URLhaus  ───────▶  radar/  crt · feeds · enrich · pipeline · cursors
-RDAP · DNS · TLS · favicon    ───────▶          │
-Playwright · pHash · ORB      ───────▶  vision/ │
-                                               ▼
+PUBLIC ADAPTERS (opt-in, all default off)     BACKEND — one FastAPI process (:8000)
+crt.sh · OpenPhish · URLhaus · PhishTank ───▶  radar/   crt · feeds · enrich · pipeline
+RDAP · DNS · TLS · favicon           ───────▶          │
+DuckDuckGo / Serper · Google Places  ───────▶  channels/  sweep · search · maps
+Playwright · pHash (optional)        ───────▶  vision/    │
+                                                        ▼
                          core/  ★ THE BRAIN — pure functions, zero I/O
                          normalize · lexical · identity/homograph · claims
                          numbers · weighted score · verdict · reasons[]
@@ -61,18 +52,18 @@ Playwright · pHash · ORB      ───────▶  vision/ │
                       all SQL in repo.py  zero-PII allowlist       exact C1/C2/C6
                                                │                     │
                                                ▼                     ▼
-                                      Guard JSONL feed         WS2/WS3 consumers
+                                      Guard JSONL feed        web/ PWA · extension/
 ```
 
 - **`core/` is pure**: no network, SQL, logging, or clock reads. All external facts arrive as `context`.
-- **All SQL lives in `backend/app/db/repo.py`** and `schema.sql`.
-- **Every external adapter has a fixture fallback and a timeout**.
+- **All SQL lives in `backend/app/db/repo.py`** and `schema.sql`. Tables start empty.
+- **Every external adapter is off by default and opt-in** (`CRT_ENABLED`, `FEEDS_ENABLED`, `ENRICH_ENABLED`, `RENDER_ENABLED`, `SEARCH_LIVE_ENABLED`, `MAPS_LIVE_ENABLED`). Disabled adapters return honest "unconfigured/empty" states.
 - **Reports contain only fake-site artifacts**: domain, verdict, reasons, timestamps, evidence path, clone, gallery match. User input never enters a report.
-- **Renderer safety**: 15-second timeout, read-only request guard, no downloads, no credentials, and no form submission. Disabled by default with `RENDER_ENABLED=0`.
-- **WS2 channels** call the same `core/` engine in-process; `guard/` syncs the WS1 JSONL feed and `extension/` only paints API tags.
-- **WS3 UI/AI** render C1–C5 from the backend and stream evidence-only explanations; the template fallback keeps the demo alive with no keys.
+- **Renderer safety**: 15-second timeout, read-only request guard, no downloads, no credentials, no form submission. Requires `RENDER_ENABLED=1` and the optional Playwright stack (`make install-render`).
+- **Evidence is real or absent**: a finding's evidence JPG exists only if a live renderer captured one. Nothing generates stand-in imagery.
+- **AI never writes `verdict`, `score`, or `reasons`**. It explains evidence after the fact, and streams `template` output until `AI_STATE=live` plus a provider key is configured.
 
-See `docs/ARCHITECTURE.md`, `docs/API.md`, and `docs/RUNBOOK.md`.
+See `docs/ARCHITECTURE.md`, `docs/API.md`, `docs/RUNBOOK.md`, and `docs/UI-KIT.md`.
 
 ---
 
@@ -82,8 +73,8 @@ See `docs/ARCHITECTURE.md`, `docs/API.md`, and `docs/RUNBOOK.md`.
 
 ```json
 {
-  "id": 42,
-  "domain": "adcb-secure-login.xyz",
+  "id": 1,
+  "domain": "example-scam.example",
   "verdict": "MALICIOUS",
   "score": 0.93,
   "reasons": ["brand typo/name 'adcb' (distance 0) outside adcb.ae"],
@@ -91,11 +82,13 @@ See `docs/ARCHITECTURE.md`, `docs/API.md`, and `docs/RUNBOOK.md`.
   "first_seen": "2026-11-24T08:01:00Z",
   "source": "crt.sh",
   "clone": 97,
-  "evidence_url": "/evidence/42.jpg",
+  "evidence_url": "/evidence/1.jpg",
   "gallery_match": "adcb.ae/login",
   "is_case_file": false
 }
 ```
+
+An empty database returns `[]` — not a sample.
 
 ### `POST /api/scan` → `ScanResult`
 
@@ -106,38 +99,36 @@ See `docs/ARCHITECTURE.md`, `docs/API.md`, and `docs/RUNBOOK.md`.
   "verdict": "MALICIOUS",
   "score": 0.95,
   "reasons": ["risky low-cost TLD .xyz", "brand typo/name 'adcb' (distance 0) outside adcb.ae"],
-  "evidence_url": "/evidence/42.jpg",
+  "evidence_url": null,
   "scam_type": "fake-banking-login",
   "offline_capable": true
 }
 ```
 
-`kind` is `url | text | number`; `lang` is `en | ar`. URL/text/number checks are rules-only and therefore work offline. The echoed `input` is never persisted.
+`kind` is `url | text | number`; `lang` is `en | ar`. URL/text/number checks are rules-only and need no network. The echoed `input` is never persisted. `evidence_url` is only present when a live renderer stored a real capture.
 
-### Other WS1 endpoints
+### Other endpoints
 
 | Method | Path | Response |
 |---|---|---|
-| GET | `/api/finding/{id}` | one `Finding` |
-| GET | `/api/evidence/{id}.jpg` | readable side-by-side JPEG |
+| GET | `/api/finding/{id}` | one `Finding`, or 404 |
+| GET | `/api/evidence/{id}.jpg` (alias `/evidence/{id}.jpg`) | real captured side-by-side JPEG, or 404 |
 | GET | `/api/status` | `{mode, heartbeats, counts, uptime_s}` |
+| GET | `/api/healthz` | adapter readiness (`ok`, `mode`, `adapters{}`) |
 | GET | `/api/stream` | SSE `finding`, `sweep`, `heartbeat` |
-| GET | `/api/guard/feed` | JSONL `GuardRow`, one line per domain |
+| GET | `/api/mode` | `{"mode":"live"}` |
+| GET | `/api/guard/feed` | JSONL `GuardRow` (empty until real confirmed fakes exist) |
 | GET | `/api/guard/stats` | blocked domains / blocked hits |
-| GET/POST | `/api/mode` | read or switch `live | demo` |
-| GET | `/api/healthz` | Docker/health probe |
+| GET | `/api/guard/config` | DNS hostname for Private DNS, or `configured:false` |
+| GET | `/api/guard/blocklist.txt` | 0.0.0.0-prefixed host list for the sync script |
+| GET | `/api/examples` | canonical sweep query presets (no sample findings/numbers) |
+| POST | `/api/sweep` | run a canonical/allowed query; empty `results` when unconfigured |
+| POST | `/api/reports` | build/file a zero-PII report from a real finding id |
+| POST | `/api/report/{id}/analysis`, `/api/report/{id}/takedown` | streamed AI explainer / deterministic template |
 
-`GuardRow`:
+`GuardRow`: `{"domain":"...","verdict":"MALICIOUS","reason":"...","flagged_at":"..."}`
 
-```json
-{"domain":"adcb-secure-login.xyz","verdict":"MALICIOUS","reason":"brand typo/name 'adcb' (distance 0) outside adcb.ae","flagged_at":"2026-11-24T08:01:00Z"}
-```
-
-`Report` (built by `reports/builder.py`, stored for WS3):
-
-```json
-{"id":7,"finding_id":42,"evidence":{ "…": "Finding object only" },"status":"SUBMITTED","auto":true,"filed_at":"2026-11-24T08:02:00Z","blocked_hits":1243}
-```
+`Report`: `{"id":7,"finding_id":1,"evidence":{ "…": "Finding object only" },"status":"SUBMITTED","auto":true,"filed_at":"...","blocked_hits":0}`
 
 The four UI tags map as `UNKNOWN → SAFE`, `SUSPICIOUS → WARNING`, `MISLEADING → MISLEADING`, `MALICIOUS → FAKE`.
 
@@ -164,7 +155,7 @@ Pipeline: **S0 normalize → S1 lexical → S2 identity → S3 claims → S4 vis
 
 `score = clamp(sum, 0, 1)`; `MALICIOUS ≥ 0.65`, `SUSPICIOUS ≥ 0.35`, otherwise `UNKNOWN`. A claim floors the verdict at `MISLEADING`; claim-only cases are also capped at `MISLEADING` so unrelated lexical weight cannot turn an unverifiable claim into a confirmed FAKE. A clone match, confirmed feed label, foreign form action, or payment-harvest fields remove that cap. Auto-file requires `MALICIOUS ∧ clone ≥ 90`; Guard blocks `MALICIOUS` by default, with `GUARD_BLOCK_MISLEADING=1` as a policy flag.
 
-The bundled catalog has **36 UAE brands** (banks, government, telecoms, airlines, delivery, marketplaces) with EN/AR aliases, plus EN/AR/Arabizi lure lexicons and a seeded list of **200 reported numbers**. `tldextract` is used through an offline snapshot resolver with a bundled static suffix fallback.
+The bundled catalog has **36 UAE brands** (banks, government, telecoms, airlines, delivery, marketplaces) with EN/AR aliases, plus EN/AR/Arabizi lure lexicons. The reported-number catalog contains 200 deterministic premium/VoIP/repeat-pattern signatures — they are rules, not stored victim data. `tldextract` runs against an offline snapshot resolver with a bundled static suffix fallback.
 
 ### The `аmazon.ae` class
 
@@ -172,51 +163,32 @@ Cyrillic `а` + Latin `mazon.ae` decodes from `xn--mazon-3ve.ae`, folds to `amaz
 
 ---
 
-## Demo, live, and deployment
+## Bring it to life
 
-- `make demo` / `DEMO_MODE=1`: serves committed JSON fixtures, replays SSE findings, keeps every endpoint alive with no network.
-- `make dev` / `MODE=live`: serves SQLite WAL; external pollers are still opt-in via `CRT_ENABLED`, `FEEDS_ENABLED`, `ENRICH_ENABLED`, and `RENDER_ENABLED`.
-- `POST /api/mode` toggles the route at runtime.
-- `/api/status` reports real monotonic heartbeat ages, honest counts, and `ai: "template"` until WS3 or `AI_STATE=ok` says otherwise.
-- `Dockerfile` targets Hugging Face Spaces: Python 3.11, seed-on-boot, `RENDER_ENABLED=0` by default. Build with `--build-arg INSTALL_RENDER=1` for Playwright/Chromium/OpenCV.
-- Cloudflare Pages origin goes in `CORS_ORIGINS`; `CORS_ORIGIN_REGEX` is available for a controlled `*.pages.dev` pattern.
-- `.env.example` documents every switch. No secret is required for the offline path.
+A bare boot is honest but quiet. To see real findings:
 
----
+1. Set `CRT_ENABLED=1` and start the app — the crt.sh poller watches new UAE-brand certificates. Keep `HTTP_USER_AGENT` identifiable.
+2. Set `FEEDS_ENABLED=1` (optionally `PHISHTANK_KEY=…`) — the OpenPhish/URLhaus poller labels confirmed scams.
+3. Set `ENRICH_ENABLED=1` — RDAP age, DNS, TLS issuer/age and favicon hash join findings.
+4. Install the renderer (`make install-render`), set `RENDER_ENABLED=1` — Playwright captures pages, pHash/ORB compare against the operator-supplied gallery index, and **real evidence JPGs** are composed and stored.
+5. Operators seed their own perceptual-hash reference set with `backend/app/vision/gallery.py`; the repository ships no gallery images.
+6. Enable the Sweep provider (`SEARCH_LIVE_ENABLED=1`, optional `SERPER_API_KEY`; or `MAPS_LIVE_ENABLED=1` + `GOOGLE_PLACES_API_KEY`) and approve official sources through `backend.app.channels.official.cli`.
+7. For AI explanations, set `AI_STATE=live` with `GEMINI_KEY` and/or `GROQ_KEY`. Without them the deterministic template is used and clearly labeled as such.
+8. Point `guard/sync_nextdns.py` (on an operator machine, never in the browser) at the API to push the confirmed-fake blocklist to NextDNS.
 
-## Ownership boundaries
-
-**WS1 owns:** `backend/app/main.py`, `config.py`, `core/**`, `radar/**`, `vision/**`, `db/**`, `reports/**`, `api/findings.py`, `api/scan.py`, `api/health.py`, `api/stream.py`, `backend/seed/**`, core tests, root build files, and shared docs.
-
-**WS2 owns:** `guard/**`, `backend/app/channels/**`, `backend/app/api/sweep.py`, `backend/app/api/guard.py`, `backend/tests/ws2/**`, and `extension/**`.
-
-**WS3 owns:** `web/**`, `backend/app/ai/**`, `backend/app/api/ai.py`, `backend/app/api/reports.py`, `ops/**`, WS3 docs, and `backend/tests/ws3/**`.
-
-**Shared integration seam:** `main.py` mounts optional routers and static `web/`; `db/repo.py` owns all SQL including sweep persistence; `.env.example`, `Makefile`, and `Dockerfile` expose the combined offline switches. See `docs/INTEGRATION.md` for the exact branch/path mapping.
-
-### Integration audit
-
-The teammate branches were imported by flattening their nested `daggers/` and `daggers-ws2-mohamed/` wrappers into the WS1 root. Standalone WS3 `server.py`/`store.py`, duplicate root `README.md`, duplicate `backend/requirements.txt`, wrapper-shaped WS3 seed fixtures, and standalone demo-server tests are intentionally excluded. No second FastAPI app, second store, or second verdict implementation exists.
-
+**[docs/RUNBOOK.md](docs/RUNBOOK.md) is the setup guide** — `.env` reference, key acquisition, deployment (Docker, Cloudflare Pages + HF Space, CORS), PWA install, extension loading, sync verification, and troubleshooting for blocked registries and unconfigured states.
 
 ---
+
+## Repository layout
+
+`backend/app/{core,radar,vision,db,reports,ai,channels,api}` · `backend/tests/**` (test doubles live only here) · `web/` (bilingual PWA, service worker) · `extension/` (MV3, pins action title to API verdict) · `guard/` (NextDNS sync) · `ops/` (i18n/syntax gates, empty-boot verifier) · `docs/`.
 
 ## Tests and quality bar
 
 ```bash
-make test
-# or: .venv/bin/python -m pytest backend/tests -q
+make check   # compile + i18n/design gate + node syntax + extension unit tests + pytest
+make verify-empty  # boots a fresh install against a temp DB and proves zero product data
 ```
-
-The **199-check** suite covers the original WS1 scorer/API/evidence contracts, the imported WS2 channel/official-registry tests, WS3 AI privacy/fallback tests, and integration checks for static shell/share target, optional router mounting, SQLite sweep persistence, Guard aliases/blocklist, report/AI routes, and the absence of duplicate root wrappers.
-
-
-Definition of Done verified here: `make seed && make demo` cold start; `/api/status`; C1/C2/C4/C6 shapes; `аmazon.ae`; 200-number seed; readable evidence JPG; zero-PII validation; seed-on-boot; WS2 sweep/Guard endpoints; WS3 PWA, reports, portal AI/takedown routes; Docker render-disabled fallback. `make test` suppresses a harmless Starlette/AnyIO deprecation warning from the installed test client; no application warnings or errors are emitted.
-
----
-
-## Source context
-
-This lane was built from the attached `daggers-the-plan.md` (what/why), `daggers-technical-spec.md` (whole-system context and ownership map), and `daggers-workstream-1-brain.md` (this lane's hard build brief). Those source documents are context and are intentionally not duplicated into this WS1 checkout. The WS1 shared-skeleton references are `docs/ARCHITECTURE.md`, `docs/API.md`, and `docs/RUNBOOK.md`.
 
 *Daggers · SCAMSHIELD AI Hackathon · Abu Dhabi Police × 42 Abu Dhabi.*

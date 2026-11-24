@@ -14,14 +14,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from .api import findings, health, scan, stream
+from .api import examples, findings, health, scan, stream
 from .catalog import load_catalogs
 from .config import Heartbeats, Settings
 from .core import scorer
 from .db.repo import Repository
 from .radar.pipeline import RadarPipeline
 from .reports.queue import ReportQueue
-from .vision import diff
 
 logger = logging.getLogger("daggers.app")
 
@@ -77,7 +76,7 @@ class Runtime:
         self.catalog = load_catalogs()
         self.heartbeats = Heartbeats()
         self.events = EventBus()
-        self.mode = self.settings.mode
+        self.mode = "live"
         self.optional_routers: dict[str, str] = {}
         self.report_queue = ReportQueue(self.repo, clone_min=self.settings.autofile_clone_min)
         self.pipeline = RadarPipeline(
@@ -87,18 +86,14 @@ class Runtime:
             report_queue=self.report_queue,
             publish=self.publish,
             heartbeats=self.heartbeats,
-            mode_getter=lambda: self.mode,
             status_getter=self.status,
         )
 
     async def start(self) -> None:
-        missing = self.repo.initialize()
-        if missing or not self.repo.get_meta("seeded_at"):
-            self.repo.seed()
-        else:
-            self.repo.ensure_assets()
-        self.mode = self.settings.mode
+        # Boot creates the canonical schema only. It never inserts product data.
+        self.repo.initialize()
         self.repo.set_meta("mode", self.mode)
+        self.repo.set_meta("schema_version", "1")
         self.heartbeats.mark("pipeline")
         await self.pipeline.start()
 
@@ -111,25 +106,26 @@ class Runtime:
 
     def status(self) -> dict:
         beats = self.heartbeats.snapshot()
-        ai_router = self.optional_routers.get("backend.app.api.ai") == "mounted"
-        ai_state = "ok" if self.settings.ai_state == "ok" or ai_router else self.settings.ai_state
         return {
             "mode": self.mode,
             "heartbeats": {
                 "crt": beats.get("crt", -1),
                 "phishtank": beats.get("phishtank", -1),
                 "pipeline": beats.get("pipeline", -1),
-                "ai": ai_state,
+                "ai": self.settings.ai_state,
             },
-            "counts": self.repo.counts(self.mode),
+            "counts": self.repo.counts(),
             "uptime_s": self.uptime_s(),
         }
 
+    def adapter_status(self) -> dict:
+        return self.settings.adapter_status()
+
     def set_mode(self, mode: str) -> dict:
-        if mode not in {"live", "demo"}:
-            raise ValueError("mode must be live or demo")
-        self.mode = mode
-        self.repo.set_meta("mode", mode)
+        # Compatibility route, locked to live mode.
+        if mode != "live":
+            raise ValueError("demo mode has been removed; only live mode is supported")
+        self.repo.set_meta("mode", self.mode)
         self.heartbeats.mark("pipeline")
         return {"mode": self.mode}
 
@@ -137,16 +133,16 @@ class Runtime:
         self.events.publish(event, data)
 
     def get_findings(self, limit: int) -> list[dict]:
-        return self.repo.get_findings(limit, self.mode)
+        return self.repo.get_findings(limit)
 
     def get_finding(self, finding_id: int) -> dict | None:
-        return self.repo.get_finding(finding_id, self.mode)
+        return self.repo.get_finding(finding_id)
 
     def guard_rows(self) -> list[dict]:
-        return self.repo.get_guard_rows(self.mode, self.settings.guard_block_misleading)
+        return self.repo.get_guard_rows(self.settings.guard_block_misleading)
 
     def guard_stats(self) -> dict:
-        return self.repo.guard_stats(self.mode, self.settings.guard_block_misleading)
+        return self.repo.guard_stats(self.settings.guard_block_misleading)
 
     def scan(self, kind: str, input_value: str, lang: str) -> dict:
         return scorer.score_request(
@@ -155,21 +151,12 @@ class Runtime:
             lang,
             **self.catalog.scoring_kwargs(),
             thresholds=self.settings.thresholds,
-            evidence_lookup=lambda domain: self.repo.find_evidence_url(domain, self.mode),
+            evidence_lookup=self.repo.find_evidence_url,
         )
 
     def ensure_evidence(self, finding_id: int) -> Path | None:
-        path = self.repo.ensure_evidence_file(finding_id, self.mode)
-        if path is not None:
-            return path
-        finding = self.repo.get_finding(finding_id, self.mode)
-        if finding is None:
-            return None
-        return diff.ensure_evidence_image(
-            finding,
-            self.settings.evidence_dir / f"{finding_id}.jpg",
-            self.settings.gallery_dir,
-        )
+        # Real evidence only. A missing render is a 404, never a generated stand-in.
+        return self.repo.ensure_evidence_file(finding_id)
 
     async def event_stream(self, is_disconnected: Callable):
         queue = self.events.subscribe()
@@ -189,7 +176,7 @@ class Runtime:
 
 
 def mount_optional_routers(app: FastAPI, runtime: Runtime) -> None:
-    """WS2/WS3 can land later; missing or broken optional routers never break WS1."""
+    """Integration routers; a broken optional router never breaks the brain."""
     for module_name in OPTIONAL_ROUTER_MODULES:
         try:
             module = importlib.import_module(module_name)
@@ -218,7 +205,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(
         title="Daggers Brain API",
         version="1.0.0",
-        description="WS1: deterministic scam verdicts, radar, evidence, reports, and SSE.",
+        description="Live deterministic scam verdicts, radar, evidence, reports, and SSE.",
         lifespan=lifespan,
     )
     app.state.runtime = runtime
@@ -233,8 +220,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             allow_headers=["Content-Type", "Accept", "X-Requested-With"],
         )
 
-    # Optional lanes first: if WS2 later owns /api/guard/feed, its route wins.
+    # Optional routers first: if an integration router also serves /api/guard/feed, its route wins.
     mount_optional_routers(app, runtime)
+    app.include_router(examples.router)
     app.include_router(findings.router)
     app.include_router(scan.router)
     app.include_router(health.router)
@@ -252,26 +240,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             """PWA share_target landing; web/js/app.js routes this to #/check."""
             return FileResponse(active_settings.web_dir / "index.html")
 
-        @app.get("/api/examples", include_in_schema=False)
-        async def web_examples() -> dict:
-            path = active_settings.web_dir / "fixtures" / "examples.json"
-            if not path.exists():
-                return {}
-            return json.loads(path.read_text(encoding="utf-8"))
-
         app.mount(
             "/",
             StaticFiles(directory=str(active_settings.web_dir), html=True),
             name="web",
         )
     else:
-
         async def root() -> dict:
             return {
                 "name": "Daggers Brain",
                 "status": "/api/status",
                 "docs": "/docs",
-                "message": "Workstream 1 is online; WS2/WS3 static UI is not present in this checkout.",
+                "message": "Live API is online; static PWA directory is not present in this checkout.",
             }
 
         app.add_api_route("/", root, methods=["GET"], include_in_schema=False)

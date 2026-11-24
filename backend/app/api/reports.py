@@ -1,4 +1,4 @@
-"""Daggers · reports API (WS3 portal routes over WS1's SQLite repository).
+"""Daggers · reports API (portal routes over the shared SQLite repository).
 
 GET  /api/reports                 list (evidence embedded)
 GET  /api/reports/{id}            one
@@ -6,9 +6,8 @@ POST /api/reports                 file a report  {finding_id} or {domain}
 POST /api/reports/{id}/advance    QUEUED → SUBMITTED → SEEN
 GET  /api/reports/{id}/export     evidence pack (JSON download)
 
-The WS3 demo store is intentionally not used in the integrated app. All report
-data comes from `request.app.state.runtime.repo`, so SQL, canonical shapes, and
-zero-PII validation stay in WS1's `db/repo.py`.
+All report data comes from `request.app.state.runtime.repo`, so SQL, canonical
+shapes, and zero-PII validation live in `db/repo.py`.
 """
 from __future__ import annotations
 

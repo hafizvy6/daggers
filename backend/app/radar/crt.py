@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import json
 import time
 from datetime import datetime, timezone
-from pathlib import Path
 
 import httpx
 
@@ -18,7 +16,7 @@ def _now() -> str:
 
 
 class CrtPoller:
-    """crt.sh CT-log adapter. Demo mode uses committed fixtures; live mode is rate-limited."""
+    """crt.sh CT-log adapter. Disabled by default; live polling is rate-limited."""
 
     CRT_URL = "https://crt.sh/"
 
@@ -26,13 +24,6 @@ class CrtPoller:
         self.settings = settings
         self.catalog = catalog
         self.cursors = cursors
-
-    def fixture_rows(self) -> list[dict]:
-        path = self.settings.seed_dir / "fixtures" / "crt.json"
-        if not path.exists():
-            return []
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return [row for row in data if isinstance(row, dict) and row.get("domain")]
 
     def _registrable(self, value: str) -> str | None:
         name = str(value).strip().lower().lstrip("*.")
@@ -44,8 +35,8 @@ class CrtPoller:
             return None
         return normalized.registrable_domain or normalized.unicode_host or None
 
-    async def poll_once(self, mode: str = "live") -> list[dict]:
-        if mode == "demo" or not self.settings.crt_enabled:
+    async def poll_once(self) -> list[dict]:
+        if not self.settings.crt_enabled:
             return []
         now = time.time()
         last = float(self.cursors.get("crt_last_query_ts", 0) or 0)

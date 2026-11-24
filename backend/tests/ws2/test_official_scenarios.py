@@ -85,7 +85,7 @@ class TestFourteenScenarios(Scenario):
             "https://news.gov.example/national-day",
             "Synthetic News Agency: the Synthetic Government announces National Day fireworks on 2 December 2026.",
         )
-        # WS1's typo heuristic flags 'news' ~ 'dewa' (distance 2): a domain-NAME signal only.
+        # The typo heuristic flags 'news' ~ 'dewa' (distance 2): a domain-NAME signal only.
         # Registry authentication of this exact domain supersedes name heuristics.
         self.layers(r, auth="AUTHENTICATED", claim="VERIFIED", ws1="SUSPICIOUS", tag="SAFE")
         self.assertEqual(r["domain_auth"]["source_class"], "B")
@@ -141,7 +141,7 @@ class TestFourteenScenarios(Scenario):
         self.assertTrue(r["manual_review"])
 
     def test_13_cloned_government_media_page(self):
-        # Cloned page impersonating a WS1-catalogued government brand, with clone evidence.
+        # Cloned page impersonating a catalogued government brand, with clone evidence.
         r = self.assess(
             "https://dubaipolice-media.example/news",
             "Synthetic News Agency: the Synthetic Government announces National Day fireworks on 2 December 2026.",
@@ -162,7 +162,7 @@ class TestFourteenScenarios(Scenario):
             "https://forum.portal.gov.example/thread/991",
             "Synthetic Ministry of Social Support is giving away AED 10,000 to every family. Claim your prize.",
         )
-        # WS1 does not treat forum.portal.gov.example as a brand domain, so its claim rule fires.
+        # The scorer does not treat forum.portal.gov.example as a brand domain, so its claim rule fires.
         self.layers(r, auth="AUTHENTICATED", claim="CONTRADICTED", ws1="MISLEADING", tag="WARNING")
         self.assertTrue(r["manual_review"])
         self.assertFalse(r["blockable"])
@@ -264,7 +264,7 @@ class TestPolicyInvariants(Scenario):
         self.assertEqual(a["gov_verification"]["policy_version"], a["policy_version"])
 
     def test_no_relevant_approved_source_is_reported_honestly(self):
-        real = helpers.Registry.load()  # production registry: every seeded entry is still pending
+        real = helpers.Registry.load()  # production registry: every curated entry is still pending
         r = helpers.scorer(records=[], registry=real).assess_url(
             "https://x.example/", text="Abu Dhabi Police warns that traffic fines are doubled"
         )

@@ -1,10 +1,10 @@
-"""WS2 trust-policy adapter: the single place that turns evidence into a UI tag.
+"""Trust-policy adapter: the single place that turns evidence into a UI tag.
 
 Four independent inputs are kept separate and reported separately:
 
 1. domain authentication  (official registry; approved + fresh only)
 2. claim verification      (official-source engine; may be absent)
-3. maliciousness evidence  (WS1 brain verdict / score / reasons)
+3. maliciousness evidence  (core brain verdict / score / reasons)
 4. final tag               (SAFE | WARNING | MISLEADING | FAKE)
 
 Hard rules:
@@ -62,7 +62,7 @@ class Maliciousness:
     ws1_score: float
     reasons: tuple[str, ...] = ()
     content_flags: tuple[str, ...] = ()  # e.g. offer/giveaway pattern found in page content
-    domain_name_only: bool = False       # every WS1 signal came from the domain/URL name itself
+    domain_name_only: bool = False       # every core signal came from the domain/URL name itself
 
     @property
     def confirmed(self) -> bool:

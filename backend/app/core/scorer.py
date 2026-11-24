@@ -593,5 +593,5 @@ def score_request(
     }
 
 
-# Explicit public aliases for other workstreams importing the brain in-process.
+# Explicit public aliases for channel adapters importing the brain in-process.
 scan = score_request

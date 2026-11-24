@@ -1,9 +1,9 @@
-"""Daggers · AI endpoints (WS3 owns the explanation, never the verdict).
+"""Daggers · AI endpoints (explanation only, never the verdict).
 
 POST /api/report/{id}/analysis  → text/event-stream deltas + final event
 POST /api/report/{id}/takedown  → {letter_en}
 
-Input is ALWAYS canonical `Report.evidence` from WS1's repository. The request
+Input is ALWAYS canonical `Report.evidence` from the repository. The request
 body cannot inject user data, and AI never writes `verdict`, `score`, or
 `reasons`. Final summaries/takedown letters are stored in `meta` as an audit
 trail without changing the zero-PII report schema.
@@ -24,6 +24,10 @@ def _repo(request: Request):
     return request.app.state.runtime.repo
 
 
+def _ai_config(request: Request) -> client.AIConfig:
+    return client.AIConfig.from_settings(request.app.state.runtime.settings)
+
+
 def _evidence(report_id: int, request: Request) -> dict:
     report = _repo(request).get_report(report_id)
     if not report:
@@ -42,7 +46,7 @@ async def analysis(report_id: int, request: Request):
     async def gen():
         yield ": daggers-ai\n\n"
         final: dict | None = None
-        async for item in client.stream_case_summary(evidence, report_id=report_id):
+        async for item in client.stream_case_summary(evidence, report_id=report_id, config=_ai_config(request)):
             if "delta_text" in item:
                 yield _sse("delta", item)
             else:
@@ -67,6 +71,6 @@ async def analysis(report_id: int, request: Request):
 @router.post("/{report_id}/takedown")
 async def takedown(report_id: int, request: Request):
     evidence = _evidence(report_id, request)
-    result = await client.takedown_letter(evidence)
+    result = await client.takedown_letter(evidence, config=_ai_config(request))
     _repo(request).set_meta(f"takedown:{report_id}", result)
     return result

@@ -2,7 +2,7 @@
 
 Only hosts in ``PROVIDER_HOSTS`` can be contacted, only over HTTPS, with a
 timeout and a size cap. User- or website-supplied URLs never reach this module.
-Stdlib only (httpx is not required for WS2).
+Stdlib only (httpx is not required here).
 """
 from __future__ import annotations
 
