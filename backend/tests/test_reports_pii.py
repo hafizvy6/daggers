@@ -15,6 +15,16 @@ from backend.app.reports.builder import (
 )
 from backend.app.reports.queue import ReportQueue
 
+
+class FakeIntake:
+    def __init__(self, *, submitted=True):
+        self.submitted = submitted
+        self.calls = []
+
+    async def submit_report(self, report):
+        self.calls.append(report)
+        return {"submitted": self.submitted, "status": "SUBMITTED" if self.submitted else "QUEUED"}
+
 FINDING = {
     "id": 42,
     "domain": "adcb-secure-login.xyz",
@@ -98,20 +108,44 @@ def test_contact_like_values_are_rejected():
         validate_zero_pii(bad_phone)
 
 
-def test_autofile_rule_requires_malicious_and_clone_proof():
+def test_autofile_rule_requires_malicious_and_confirmed_proof():
     assert autofile_eligible(FINDING) is True
     assert autofile_eligible({**FINDING, "clone": 0}) is False
-    assert autofile_eligible({**FINDING, "verdict": "SUSPICIOUS"}) is False
+    assert autofile_eligible({**FINDING, "clone": 0}, confirmed_context={"phishtank_confirmed": True}) is True
+    assert autofile_eligible({**FINDING, "clone": 0}, confirmed_context={"form_action_mismatch": True}) is False
+    assert autofile_eligible({**FINDING, "verdict": "SUSPICIOUS"}, confirmed_context={"phishtank_confirmed": True}) is False
 
 
-def test_report_queue_autofiles_and_submits_without_pii():
+def test_report_queue_autofiles_and_submits_to_authorized_intake_without_pii():
     repo = FakeRepo()
-    queue = ReportQueue(repo)
-    report = queue.maybe_auto_file(FINDING, blocked_hits=12)
+    intake = FakeIntake()
+    queue = ReportQueue(repo, intake=intake)
+    report = queue.maybe_auto_file(FINDING, blocked_hits=12, confirmed_context={"phishtank_confirmed": True})
     assert report is not None
     assert report["status"] == "QUEUED"
     assert report["blocked_hits"] == 12
-    submitted = queue.submit_queued()
+    import asyncio
+    submitted = asyncio.run(queue.submit_queued())
     assert submitted[0]["status"] == "SUBMITTED"
+    assert len(intake.calls) == 1
+    assert intake.calls[0]["evidence"]["domain"] == FINDING["domain"]
     exported = json.loads(queue.export(report["id"]))
     validate_zero_pii(exported)
+
+
+def test_report_queue_keeps_report_queued_when_police_intake_is_not_configured():
+    repo = FakeRepo()
+    queue = ReportQueue(repo, intake=FakeIntake(submitted=False))
+    report = queue.maybe_auto_file(FINDING, blocked_hits=3)
+    assert report is not None
+    import asyncio
+    submitted = asyncio.run(queue.submit_queued())
+    assert submitted == []
+    assert repo.get_report(report["id"])["status"] == "QUEUED"
+
+
+def test_auto_report_kill_switch_prevents_report_creation():
+    repo = FakeRepo()
+    queue = ReportQueue(repo, auto_report_enabled=False, intake=FakeIntake())
+    assert queue.maybe_auto_file(FINDING, blocked_hits=3) is None
+    assert repo.reports == []

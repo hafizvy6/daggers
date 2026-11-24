@@ -265,17 +265,31 @@ def _brand_candidates(
         official = str(brand.get("official_domain", "")).lower()
         official_label = official.split(".")[0]
         aliases = [str(alias).lower() for alias in brand.get("aliases", [])]
-        tokens = tuple(dict.fromkeys([canonical, *aliases]))
+        radar_terms = [str(term).lower() for term in brand.get("radar_terms", [])]
+        tokens = tuple(dict.fromkeys([canonical, *aliases, *radar_terms]))
         url_token = next(
             (token for token in tokens if len(token) >= 3 and _token_present(token, folded_url)),
             None,
+        )
+        generic_suffix = re.compile(
+            r"(?:account|alert|bank|banking|cards|help|home|login|mobile|online|pay|payment|portal|secure|service|support|web)$"
+        )
+        folded_labels = [homograph.confusable_fold(label) for label in labels]
+        compound_host = any(
+            len(homograph.confusable_fold(token)) >= 4
+            and any(
+                label == homograph.confusable_fold(token)
+                or (label.startswith(homograph.confusable_fold(token)) and generic_suffix.search(label[len(token):]))
+                for label in folded_labels
+            )
+            for token in tokens
         )
         exact_host = any(
             homograph.confusable_fold(segment) == homograph.confusable_fold(token)
             for segment in [*segments, *labels]
             for token in tokens
             if len(token) >= 3
-        ) or any(
+        ) or compound_host or any(
             homograph.confusable_fold(label) == homograph.confusable_fold(official_label)
             for label in labels
         )
@@ -325,14 +339,8 @@ def _identity_signals(
                 f"brand typo/name '{chosen['token']}' (distance 0) outside {chosen['official']}",
             )
         ]
-        url_token = chosen["url_token"] or chosen["token"]
-        signals.append(
-            Signal(
-                "identity.brand_in_url",
-                0.25,
-                f"brand name '{url_token}' appears outside its official domain",
-            )
-        )
+        # Do not also emit brand_in_url here: it would double-count the same
+        # host token and push brand-only bait sites past MALICIOUS without proof.
         return signals, True
 
     typos = [item for item in candidates if item["distance"] <= 2]
@@ -358,7 +366,7 @@ def _identity_signals(
                 )
             )
         brand_hit = True
-    if mentions:
+    elif mentions:
         chosen = max(mentions, key=lambda item: len(item["url_token"] or ""))
         signals.append(
             Signal(

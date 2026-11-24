@@ -102,7 +102,10 @@
     "emptyTitle": "The radar is quiet — watching.",
     "emptyBody": "Once a live adapter is enabled, new findings appear here with their real evidence.",
     "loading": "Reading the radar…",
-    "liveNote": "Updates live from certificate logs."
+    "liveNote": "Updates live from certificate logs.",
+    "analystQueue": "Analyst queue",
+    "analystQueueNote": "Show suppressed CT-only unknown candidates for human review",
+    "actionableView": "Actionable feed"
   },
   "finding": {
     "kicker": "Finding #{id}",
@@ -137,7 +140,25 @@
     "notFoundBody": "It may have been merged into a newer case. Back to the feed.",
     "offlineTitle": "Real evidence",
     "offlineNote": "No real capture is available yet. Evidence appears only after a live renderer stores one.",
-    "kickerEnrich": "ENRICH"
+    "kickerEnrich": "ENRICH",
+    "tlReviewed": "Radar reviewed it — no impersonation signal reached the threshold",
+    "noCaptureTitle": "Screenshot not captured yet",
+    "noCaptureBody": "A real screenshot appears only after the live renderer stores one. Nothing is simulated or substituted.",
+    "captureFailed": "The stored capture could not be loaded. It may have been removed from disk.",
+    "noCloneMatch": "No clone comparison has been completed yet",
+    "labelTitle": "Analyst review",
+    "labelKicker": "Human-in-the-loop",
+    "labelNote": "Teach the radar what this domain is. This does not call the police and does not reveal personal data. Official/unrelated/parked domains are hidden from the default feed.",
+    "labelOfficial": "Official",
+    "labelScam": "Scam",
+    "labelUnrelated": "Unrelated",
+    "labelParked": "Parked",
+    "labelCurrent": "Current label: {label}",
+    "labelUnset": "No analyst label yet",
+    "labelSaving": "Saving label…",
+    "labelMarked": "Marked as scam evidence.",
+    "labelSuppressed": "Saved — hidden from the default Radar feed.",
+    "labelSaveFailed": "Could not save the label."
   },
   "sweep": {
     "kicker": "Search & Maps",

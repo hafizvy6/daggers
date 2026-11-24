@@ -24,6 +24,13 @@
       "fab",
       "first abu dhabi bank",
       "بنك أبوظبي الأول"
+    ],
+    "radar_terms": [
+      "bankfab",
+      "fabbank",
+      "firstabudhabi",
+      "first-abu-dhabi",
+      "firstabudhabibank"
     ]
   },
   {
@@ -42,6 +49,10 @@
       "dib",
       "dubai islamic bank",
       "بنك دبي الإسلامي"
+    ],
+    "radar_terms": [
+      "dibbank",
+      "dubaiislamic"
     ]
   },
   {
@@ -169,6 +180,12 @@
       "rta",
       "roads and transport authority",
       "هيئة الطرق والمواصلات"
+    ],
+    "radar_terms": [
+      "rtarefund",
+      "rtaticket",
+      "rtatopup",
+      "rta-parking"
     ]
   },
   {

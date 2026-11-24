@@ -153,7 +153,7 @@ Pipeline: **S0 normalize → S1 lexical → S2 identity → S3 claims → S4 vis
 | Visual clone ≥90% with brand hit | +0.60 |
 | Foreign form action / payment fields / obfuscated script | +0.30 / +0.25 / +0.15 |
 
-`score = clamp(sum, 0, 1)`; `MALICIOUS ≥ 0.65`, `SUSPICIOUS ≥ 0.35`, otherwise `UNKNOWN`. A claim floors the verdict at `MISLEADING`; claim-only cases are also capped at `MISLEADING` so unrelated lexical weight cannot turn an unverifiable claim into a confirmed FAKE. A clone match, confirmed feed label, foreign form action, or payment-harvest fields remove that cap. Auto-file requires `MALICIOUS ∧ clone ≥ 90`; Guard blocks `MALICIOUS` by default, with `GUARD_BLOCK_MISLEADING=1` as a policy flag.
+`score = clamp(sum, 0, 1)`; `MALICIOUS ≥ 0.65`, `SUSPICIOUS ≥ 0.35`, otherwise `UNKNOWN`. A claim floors the verdict at `MISLEADING`; claim-only cases are also capped at `MISLEADING` so unrelated lexical weight cannot turn an unverifiable claim into a confirmed FAKE. A clone match, confirmed feed label, foreign form action, or payment-harvest fields remove that cap. Auto-file requires `MALICIOUS` plus confirmation (`clone ≥ 90` or a confirmed phishing-feed match); brand-only lexical weight never auto-files. Brand-only exact matches no longer double-count as both typo and URL-token signals; Guard blocks `MALICIOUS` by default, with `GUARD_BLOCK_MISLEADING=1` as a policy flag.
 
 The bundled catalog has **36 UAE brands** (banks, government, telecoms, airlines, delivery, marketplaces) with EN/AR aliases, plus EN/AR/Arabizi lure lexicons. The reported-number catalog contains 200 deterministic premium/VoIP/repeat-pattern signatures — they are rules, not stored victim data. `tldextract` runs against an offline snapshot resolver with a bundled static suffix fallback.
 
@@ -167,11 +167,11 @@ Cyrillic `а` + Latin `mazon.ae` decodes from `xn--mazon-3ve.ae`, folds to `amaz
 
 A bare boot is honest but quiet. To see real findings:
 
-1. Set `CRT_ENABLED=1` and start the app — the crt.sh poller watches new UAE-brand certificates. Keep `HTTP_USER_AGENT` identifiable.
+1. Set `CRT_ENABLED=1` and start the app — the crt.sh poller watches high-signal UAE-brand certificate terms (never raw three-letter tokens). Keep `HTTP_USER_AGENT` identifiable. Use `python ops/evaluate_radar.py` to inspect the offline labeled candidate/risk harness.
 2. Set `FEEDS_ENABLED=1` (optionally `PHISHTANK_KEY=…`) — the OpenPhish/URLhaus poller labels confirmed scams.
 3. Set `ENRICH_ENABLED=1` — RDAP age, DNS, TLS issuer/age and favicon hash join findings.
 4. Install the renderer (`make install-render`), set `RENDER_ENABLED=1` — Playwright captures pages, pHash/ORB compare against the operator-supplied gallery index, and **real evidence JPGs** are composed and stored.
-5. Operators seed their own perceptual-hash reference set with `backend/app/vision/gallery.py`; the repository ships no gallery images.
+5. Capture real official-page reference screenshots with `python ops/capture_reference.py --all-brands` (or selected domains). Keep them under `GALLERY_DIR`; the repository ships no reference imagery.
 6. Enable the Sweep provider (`SEARCH_LIVE_ENABLED=1`, optional `SERPER_API_KEY`; or `MAPS_LIVE_ENABLED=1` + `GOOGLE_PLACES_API_KEY`) and approve official sources through `backend.app.channels.official.cli`.
 7. For AI explanations, set `AI_STATE=live` with `GEMINI_KEY` and/or `GROQ_KEY`. Without them the deterministic template is used and clearly labeled as such.
 8. Point `guard/sync_nextdns.py` (on an operator machine, never in the browser) at the API to push the confirmed-fake blocklist to NextDNS.

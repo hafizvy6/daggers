@@ -58,7 +58,12 @@ make check            # compileall + i18n/design gate + node syntax + extension 
 | `CORS_ORIGIN_REGEX` | — | controlled alternative, e.g. `^https://[a-z0-9-]+\.pages\.dev$` |
 | `MALICIOUS_THRESHOLD` / `SUSPICIOUS_THRESHOLD` | `0.65` / `0.35` | verdict cut-offs |
 | `RENDER_SCORE_MIN` | `0.45` | minimum triage score before spending a render |
-| `AUTOFILE_CLONE_MIN` | `90` | clone % required for auto-filed reports |
+| `AUTOFILE_CLONE_MIN` | `90` | clone % sufficient for auto-filed reports; a confirmed phishing-feed match also suffices |
+| `RADAR_MIN_DISPLAY_SCORE` | `0.35` | minimum score for actionable Radar findings; CT-only `UNKNOWN` rows are suppressed |
+| `AUTO_REPORT_ENABLED` | `1` | allow automatic zero-PII report creation for confirmed findings |
+| `POLICE_INTAKE_ENABLED` | `0` | enable authorized external police-intake submission |
+| `POLICE_INTAKE_URL` | — | HTTPS endpoint supplied by the receiving authority; required for live submission |
+| `POLICE_INTAKE_TIMEOUT_S` | `10` | submission timeout; failures keep the report QUEUED |
 | `GUARD_BLOCK_MISLEADING` | `0` | `1` also blocks claim-only MISLEADING domains (policy decision) |
 | `GUARD_MAX_AGE_DAYS` | `30` | Guard ignores MALICIOUS rows older than this |
 
@@ -101,19 +106,27 @@ make check            # compileall + i18n/design gate + node syntax + extension 
 
 Enable in this order, verifying after each — each stage works with the rest off:
 
-1. **crt.sh** — `CRT_ENABLED=1`. Watch the logs; `GET /api/status` shows `heartbeats.crt` counting down from poll interval. Politeness built-in: ≥20 s between queries, custom UA `Daggers-Research/1.0`. No credential needed. Note crt.sh is free but rate-limited; on 429 the poller backs off and produces no findings.
+1. **crt.sh** — `CRT_ENABLED=1`. The poller queries high-signal official/compound brand terms (never raw three-letter tokens like `fab`) and admits a certificate only when a brand appears as a bounded label or controlled suffix (for example `bankfab-login`), not from substring noise such as `fab7`. Run `.venv/bin/python ops/evaluate_radar.py` to check the offline candidate/risk harness. Watch the logs; `GET /api/status` shows `heartbeats.crt` counting down from poll interval. Politeness built-in: ≥20 s between queries, custom UA `Daggers-Research/1.0`. No credential needed. Note crt.sh is free but rate-limited; on 429 the poller backs off and produces no findings.
 2. **Phishing feeds** — `FEEDS_ENABLED=1`. OpenPhish and URLhaus need no key. For PhishTank, register at phishtank.com, set `PHISHTANK_KEY`, and keep `http_user_agent` identifiable.
-3. **Enrichment** — `ENRICH_ENABLED=1`. Adds RDAP record age (via rdap.org), DNS A records, TLS issuer/first-seen, and a favicon perceptual hash. Timeout-isolated; worst case is missing fields, never a crash.
+3. **Enrichment** — `ENRICH_ENABLED=1`. Adds RDAP record age (via rdap.org), DNS A records, TLS issuer/first-seen, a favicon perceptual hash, and a bounded read-only HTML check (`<title>`, form action host, payment-harvest input names; no scripts or forms are executed). Public hosts only; private/loopback redirects are rejected. Timeout-isolated; worst case is missing fields, never a crash.
 4. **Renderer** — `make install-render` (installs imagehash, numpy, opencv-headless, playwright; then `playwright install chromium`; on the slim Docker image add `--with-deps` or use `INSTALL_RENDER=1`). Then `RENDER_ENABLED=1`. The renderer loads pages read-only: no downloads, no form fills, no credential submissions, 15 s hard timeout. **Evidence JPGs appear only from now on**, composed side-by-side against the reference capture.
-5. **Gallery index** — the repo intentionally ships no reference screenshots. Operators build their own: capture the official login page, compute its pHash, and append entries to the gallery index JSON (see `backend/app/vision/gallery.py`; place files in `$GALLERY_DIR` and keep an index at the path it loads). Without this, clone detection reports nothing — honestly.
+5. **Official references** — the repo intentionally ships no reference screenshots. Build real captures on an operator machine with `python ops/capture_reference.py adnoc.ae adcb.ae` or `python ops/capture_reference.py --all-brands`; files stay under `$GALLERY_DIR` as `reference_<host>.jpg`. Without these, clone detection reports nothing — honestly.
 
 Check the loop end-to-end:
 
 ```bash
 curl -s localhost:8000/api/healthz   # every enabled adapter shows enabled:true
-curl -s 'localhost:8000/api/feed?limit=5'
+curl -s 'localhost:8000/api/feed?limit=5'   # actionable findings; CT-only UNKNOWN rows hidden
+curl -s 'localhost:8000/api/feed?include_unknown=true'  # analyst view of suppressed candidates
 curl -N  localhost:8000/api/stream   # heartbeat; real findings appear as events
+.venv/bin/python ops/evaluate_radar.py       # offline candidate/risk metrics
 ```
+
+## Police intake (authorized only)
+
+Use **Analyst queue** in the Radar feed (or `include_unknown=true&include_suppressed=true`) to review suppressed candidates. Opening a finding offers `Official`, `Scam`, `Unrelated`, and `Parked` labels; the latter three are suppressed from the default feed and skipped by future radar enrichment. Labels contain no free text or PII.
+
+`AUTO_REPORT_ENABLED=1` (default) lets the system create a zero-PII report automatically when a finding is **MALICIOUS plus confirmation** (`clone >= AUTOFILE_CLONE_MIN` or a confirmed phishing-feed match). Creation does not invent an external destination: without `POLICE_INTAKE_ENABLED=1` and `POLICE_INTAKE_URL`, the report remains **QUEUED** in the portal for an authorized operator workflow. When an authority supplies an HTTPS endpoint, set `POLICE_INTAKE_ENABLED=1`, `POLICE_INTAKE_URL`, and optionally `POLICE_INTAKE_TOKEN`; the adapter sends only `schema`, `report_id`, `finding_id`, the zero-PII evidence, `blocked_hits`, and `auto`. On any non-2xx response, timeout, or network failure the report stays **QUEUED**. Never publish a token in the browser or Git.
 
 ## 5. Sweep (Search / Maps)
 
