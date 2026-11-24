@@ -137,7 +137,12 @@
     "notFoundBody": "It may have been merged into a newer case. Back to the feed.",
     "offlineTitle": "Real evidence",
     "offlineNote": "No real capture is available yet. Evidence appears only after a live renderer stores one.",
-    "kickerEnrich": "ENRICH"
+    "kickerEnrich": "ENRICH",
+    "tlReviewed": "Radar reviewed it — no impersonation signal reached the threshold",
+    "noCaptureTitle": "Screenshot not captured yet",
+    "noCaptureBody": "A real screenshot appears only after the live renderer stores one. Nothing is simulated or substituted.",
+    "captureFailed": "The stored capture could not be loaded. It may have been removed from disk.",
+    "noCloneMatch": "No clone comparison has been completed yet"
   },
   "sweep": {
     "kicker": "Search & Maps",

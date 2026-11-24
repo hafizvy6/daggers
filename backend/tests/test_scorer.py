@@ -22,10 +22,18 @@ def test_official_subdomain_is_clean(scoring_kwargs):
     assert result.score == 0.0
 
 
+def test_brand_only_domain_is_suspicious_not_malicious(scoring_kwargs):
+    result = score("https://adnoc-dist.co.ae/", scoring_kwargs)
+    assert result.verdict == "SUSPICIOUS"
+    assert result.score < 0.65
+    assert result.brand_hit is True
+    assert "identity.brand_in_url" not in result.l1_detail
+
+
 def test_brand_login_clone_is_malicious(scoring_kwargs):
     result = score("https://adcb-secure-login.xyz", scoring_kwargs)
     assert result.verdict == "MALICIOUS"
-    assert result.score >= 0.90
+    assert result.score >= 0.65
     assert result.brand_hit is True
     assert any("brand typo/name 'adcb'" in reason for reason in result.reasons)
     assert result.l1_detail["identity.brand_typo_d1"] == 0.55

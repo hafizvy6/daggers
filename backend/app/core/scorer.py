@@ -325,14 +325,8 @@ def _identity_signals(
                 f"brand typo/name '{chosen['token']}' (distance 0) outside {chosen['official']}",
             )
         ]
-        url_token = chosen["url_token"] or chosen["token"]
-        signals.append(
-            Signal(
-                "identity.brand_in_url",
-                0.25,
-                f"brand name '{url_token}' appears outside its official domain",
-            )
-        )
+        # Do not also emit brand_in_url here: it would double-count the same
+        # host token and push brand-only bait sites past MALICIOUS without proof.
         return signals, True
 
     typos = [item for item in candidates if item["distance"] <= 2]
@@ -358,7 +352,7 @@ def _identity_signals(
                 )
             )
         brand_hit = True
-    if mentions:
+    elif mentions:
         chosen = max(mentions, key=lambda item: len(item["url_token"] or ""))
         signals.append(
             Signal(

@@ -98,16 +98,18 @@ def test_contact_like_values_are_rejected():
         validate_zero_pii(bad_phone)
 
 
-def test_autofile_rule_requires_malicious_and_clone_proof():
+def test_autofile_rule_requires_malicious_and_confirmed_proof():
     assert autofile_eligible(FINDING) is True
     assert autofile_eligible({**FINDING, "clone": 0}) is False
-    assert autofile_eligible({**FINDING, "verdict": "SUSPICIOUS"}) is False
+    assert autofile_eligible({**FINDING, "clone": 0}, confirmed_context={"phishtank_confirmed": True}) is True
+    assert autofile_eligible({**FINDING, "clone": 0}, confirmed_context={"form_action_mismatch": True}) is False
+    assert autofile_eligible({**FINDING, "verdict": "SUSPICIOUS"}, confirmed_context={"phishtank_confirmed": True}) is False
 
 
 def test_report_queue_autofiles_and_submits_without_pii():
     repo = FakeRepo()
     queue = ReportQueue(repo)
-    report = queue.maybe_auto_file(FINDING, blocked_hits=12)
+    report = queue.maybe_auto_file(FINDING, blocked_hits=12, confirmed_context={"phishtank_confirmed": True})
     assert report is not None
     assert report["status"] == "QUEUED"
     assert report["blocked_hits"] == 12

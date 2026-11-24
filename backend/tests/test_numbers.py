@@ -21,6 +21,13 @@ def test_premium_prefix_without_report_is_suspicious():
     assert any("premium-rate" in reason for reason in result.reasons)
 
 
+def test_north_american_caribbean_premium_forms_are_suspicious():
+    for value in ("+1 809 555 0123", "+1 829 555 0123", "+1 849 555 0123", "001-809-555-0123"):
+        result = numbers.check_number(value)
+        assert result.verdict == "SUSPICIOUS", value
+        assert any("Caribbean" in reason for reason in result.reasons), value
+
+
 def test_voip_callback_pattern_is_suspicious():
     result = numbers.check_number("+445612345678")
     assert result.verdict == "SUSPICIOUS"

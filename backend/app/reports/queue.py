@@ -17,8 +17,8 @@ class ReportQueue:
         self.repo = repo
         self.clone_min = clone_min
 
-    def maybe_auto_file(self, finding: dict, *, blocked_hits: int = 0) -> dict | None:
-        if not autofile_eligible(finding, self.clone_min):
+    def maybe_auto_file(self, finding: dict, *, blocked_hits: int = 0, confirmed_context: dict | None = None) -> dict | None:
+        if not autofile_eligible(finding, self.clone_min, confirmed_context):
             return None
         evidence = build_evidence(finding)
         validate_zero_pii(evidence)

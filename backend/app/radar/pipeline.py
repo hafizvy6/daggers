@@ -199,7 +199,7 @@ class RadarPipeline:
             rendered=bool(evidence_path),
         ) or finding
 
-        self.report_queue.maybe_auto_file(finding)
+        self.report_queue.maybe_auto_file(finding, confirmed_context=vision_context)
         self.report_queue.submit_queued(limit=1)
         self.publish("finding", finding)
         self.heartbeats.mark("pipeline")
