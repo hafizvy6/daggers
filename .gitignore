@@ -1,0 +1,26 @@
+# Local runtime
+.venv/
+.env
+backend/data/
+snapshot/
+*.db
+*.db-wal
+*.db-shm
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Build / editor / OS
+dist/
+build/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,307 @@
+[
+  {
+    "token": "adcb",
+    "official_domain": "adcb.ae",
+    "aliases": [
+      "adcb",
+      "بنك أبوظبي التجاري",
+      "أبوظبي التجاري"
+    ]
+  },
+  {
+    "token": "emiratesnbd",
+    "official_domain": "emiratesnbd.com",
+    "aliases": [
+      "emirates nbd",
+      "بنك الإمارات دبي الوطني",
+      "الإمارات دبي الوطني"
+    ]
+  },
+  {
+    "token": "fab",
+    "official_domain": "bankfab.com",
+    "aliases": [
+      "fab",
+      "first abu dhabi bank",
+      "بنك أبوظبي الأول"
+    ]
+  },
+  {
+    "token": "mashreq",
+    "official_domain": "mashreq.com",
+    "aliases": [
+      "mashreq",
+      "بنك المشرق",
+      "المشرق"
+    ]
+  },
+  {
+    "token": "dib",
+    "official_domain": "dib.ae",
+    "aliases": [
+      "dib",
+      "dubai islamic bank",
+      "بنك دبي الإسلامي"
+    ]
+  },
+  {
+    "token": "cbd",
+    "official_domain": "cbd.ae",
+    "aliases": [
+      "cbd",
+      "commercial bank of dubai",
+      "بنك دبي التجاري"
+    ]
+  },
+  {
+    "token": "rakbank",
+    "official_domain": "rakbank.ae",
+    "aliases": [
+      "rakbank",
+      "بنك رأس الخيمة"
+    ]
+  },
+  {
+    "token": "alhilalbank",
+    "official_domain": "alhilalbank.ae",
+    "aliases": [
+      "al hilal bank",
+      "بنك الهلال"
+    ]
+  },
+  {
+    "token": "adib",
+    "official_domain": "adib.ae",
+    "aliases": [
+      "adib",
+      "abu dhabi islamic bank",
+      "بنك أبوظبي الإسلامي"
+    ]
+  },
+  {
+    "token": "sib",
+    "official_domain": "sib.ae",
+    "aliases": [
+      "sib",
+      "sharjah islamic bank",
+      "بنك الشارقة الإسلامي"
+    ]
+  },
+  {
+    "token": "ajmanbank",
+    "official_domain": "ajmanbank.ae",
+    "aliases": [
+      "ajman bank",
+      "بنك عجمان"
+    ]
+  },
+  {
+    "token": "wio",
+    "official_domain": "wio.io",
+    "aliases": [
+      "wio",
+      "ويو",
+      "بنك ويو"
+    ]
+  },
+  {
+    "token": "uaeexchange",
+    "official_domain": "uaeexchange.com",
+    "aliases": [
+      "uae exchange",
+      "الإمارات للصرافة"
+    ]
+  },
+  {
+    "token": "alansariexchange",
+    "official_domain": "alansariexchange.com",
+    "aliases": [
+      "al ansari exchange",
+      "الأنصاري للصرافة"
+    ]
+  },
+  {
+    "token": "luluexchange",
+    "official_domain": "luluexchange.com",
+    "aliases": [
+      "lulu exchange",
+      "لولو للصرافة"
+    ]
+  },
+  {
+    "token": "abudhabipolice",
+    "official_domain": "adpolice.gov.ae",
+    "aliases": [
+      "abu dhabi police",
+      "شرطة أبوظبي"
+    ]
+  },
+  {
+    "token": "dubaipolice",
+    "official_domain": "dubaipolice.gov.ae",
+    "aliases": [
+      "dubai police",
+      "شرطة دبي"
+    ]
+  },
+  {
+    "token": "uaepass",
+    "official_domain": "uaepass.ae",
+    "aliases": [
+      "uae pass",
+      "الهوية الرقمية",
+      "يو إيه إي باس"
+    ]
+  },
+  {
+    "token": "icp",
+    "official_domain": "icp.gov.ae",
+    "aliases": [
+      "icp",
+      "federal authority for identity",
+      "الهيئة الاتحادية للهوية"
+    ]
+  },
+  {
+    "token": "rta",
+    "official_domain": "rta.ae",
+    "aliases": [
+      "rta",
+      "roads and transport authority",
+      "هيئة الطرق والمواصلات"
+    ]
+  },
+  {
+    "token": "dewa",
+    "official_domain": "dewa.gov.ae",
+    "aliases": [
+      "dewa",
+      "dubai electricity",
+      "هيئة كهرباء ومياه دبي"
+    ]
+  },
+  {
+    "token": "addc",
+    "official_domain": "addc.ae",
+    "aliases": [
+      "addc",
+      "abu dhabi distribution",
+      "شركة أبوظبي للتوزيع"
+    ]
+  },
+  {
+    "token": "adnoc",
+    "official_domain": "adnoc.ae",
+    "aliases": [
+      "adnoc",
+      "أدنوك"
+    ]
+  },
+  {
+    "token": "etisalat",
+    "official_domain": "etisalat.ae",
+    "aliases": [
+      "etisalat",
+      "اتصالات",
+      "e&"
+    ]
+  },
+  {
+    "token": "du",
+    "official_domain": "du.ae",
+    "aliases": [
+      "du",
+      "دو",
+      "du telecom"
+    ]
+  },
+  {
+    "token": "emirates",
+    "official_domain": "emirates.com",
+    "aliases": [
+      "emirates",
+      "الإمارات",
+      "طيران الإمارات"
+    ]
+  },
+  {
+    "token": "flydubai",
+    "official_domain": "flydubai.com",
+    "aliases": [
+      "flydubai",
+      "فلاي دبي"
+    ]
+  },
+  {
+    "token": "etihad",
+    "official_domain": "etihad.com",
+    "aliases": [
+      "etihad",
+      "الاتحاد للطيران"
+    ]
+  },
+  {
+    "token": "airarabia",
+    "official_domain": "airarabia.com",
+    "aliases": [
+      "air arabia",
+      "العربية للطيران"
+    ]
+  },
+  {
+    "token": "aramex",
+    "official_domain": "aramex.com",
+    "aliases": [
+      "aramex",
+      "أرامكس"
+    ]
+  },
+  {
+    "token": "careem",
+    "official_domain": "careem.com",
+    "aliases": [
+      "careem",
+      "كريم"
+    ]
+  },
+  {
+    "token": "talabat",
+    "official_domain": "talabat.com",
+    "aliases": [
+      "talabat",
+      "طلبات"
+    ]
+  },
+  {
+    "token": "noon",
+    "official_domain": "noon.com",
+    "aliases": [
+      "noon",
+      "نون"
+    ]
+  },
+  {
+    "token": "amazon",
+    "official_domain": "amazon.ae",
+    "aliases": [
+      "amazon",
+      "أمازون"
+    ]
+  },
+  {
+    "token": "dubizzle",
+    "official_domain": "dubizzle.com",
+    "aliases": [
+      "dubizzle",
+      "دوبيزل"
+    ]
+  },
+  {
+    "token": "mohre",
+    "official_domain": "mohre.gov.ae",
+    "aliases": [
+      "mohre",
+      "وزارة الموارد البشرية"
+    ]
+  }
+]

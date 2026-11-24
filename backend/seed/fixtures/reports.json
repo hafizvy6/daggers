@@ -1,0 +1,82 @@
+[
+  {
+    "id": 7,
+    "finding_id": 42,
+    "evidence": {
+      "id": 42,
+      "domain": "adcb-secure-login.xyz",
+      "verdict": "MALICIOUS",
+      "score": 0.93,
+      "reasons": [
+        "brand typo/name 'adcb' (distance 0) outside adcb.ae",
+        "TLS certificate issued less than 24h ago",
+        "visual clone 97% match to adcb.ae/login",
+        "form posts to foreign host"
+      ],
+      "cert_issued": "2026-11-24T07:58:00Z",
+      "first_seen": "2026-11-24T08:01:00Z",
+      "source": "crt.sh",
+      "clone": 97,
+      "evidence_url": "/evidence/42.jpg",
+      "gallery_match": "adcb.ae/login",
+      "is_case_file": false
+    },
+    "status": "SUBMITTED",
+    "auto": true,
+    "filed_at": "2026-11-24T08:02:00Z",
+    "blocked_hits": 1243
+  },
+  {
+    "id": 8,
+    "finding_id": 45,
+    "evidence": {
+      "id": 45,
+      "domain": "emiratesnbd-refund.click",
+      "verdict": "MALICIOUS",
+      "score": 0.88,
+      "reasons": [
+        "risky low-cost TLD .click",
+        "brand typo/name 'emiratesnbd' (distance 0) outside emiratesnbd.com",
+        "payment-harvest fields (iban, cvv, otp)",
+        "visual clone 93% match to emiratesnbd.com/login"
+      ],
+      "cert_issued": "2026-11-24T07:22:00Z",
+      "first_seen": "2026-11-24T07:25:00Z",
+      "source": "crt.sh",
+      "clone": 93,
+      "evidence_url": "/evidence/45.jpg",
+      "gallery_match": "emiratesnbd.com/login",
+      "is_case_file": false
+    },
+    "status": "QUEUED",
+    "auto": true,
+    "filed_at": null,
+    "blocked_hits": 318
+  },
+  {
+    "id": 9,
+    "finding_id": 43,
+    "evidence": {
+      "id": 43,
+      "domain": "xn--mazon-3ve.ae",
+      "verdict": "MALICIOUS",
+      "score": 0.8,
+      "reasons": [
+        "punycode IDN label (xn--)",
+        "mixed-script domain label (CYRILLIC + LATIN)",
+        "confusable spoof of amazon.ae (look-alike letters from another alphabet)"
+      ],
+      "cert_issued": "2026-11-24T07:41:00Z",
+      "first_seen": "2026-11-24T07:43:00Z",
+      "source": "crt.sh",
+      "clone": 0,
+      "evidence_url": "/evidence/43.jpg",
+      "gallery_match": "amazon.ae/home",
+      "is_case_file": true
+    },
+    "status": "SEEN",
+    "auto": false,
+    "filed_at": "2026-11-24T07:50:00Z",
+    "blocked_hits": 57
+  }
+]
