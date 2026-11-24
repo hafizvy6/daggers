@@ -430,3 +430,13 @@ def test_ws3_reports_and_ai_routes_use_live_repository(api_env, insert_test_find
     takedown = client.post(f"/api/report/{report_id}/takedown")
     assert takedown.status_code == 200
     assert "letter_en" in takedown.json()
+
+
+def test_sweep_selfcheck_reports_per_adapter_outcome(api_env):
+    client, _, _ = api_env
+    response = client.get("/api/sweep/selfcheck")
+    assert response.status_code == 200
+    data = response.json()
+    assert set(data) == {"query", "search", "maps", "live"}
+    assert data["search"] == [] and data["maps"] == []  # no adapters configured in tests
+    assert data["live"] is False
