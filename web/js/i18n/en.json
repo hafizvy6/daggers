@@ -178,7 +178,7 @@
     "listingName": "Listing",
     "listingPhone": "Phone",
     "listingSite": "Website",
-    "blockedNote": "A fake listing gets tagged, saved, and queued as a zero-PII dossier for the police portal — same as a fake website.",
+    "blockedNote": "Flagged rows are listed with reasons — a sweep never files anything. Only a confirmed Radar finding is queued automatically as a zero-PII portal dossier.",
     "resultsCount": "{n} results · {bad} flagged",
     "notSureTitle": "Saw something not in this list?",
     "notSureBody": "Paste it into the Checker — link, message, or number.",
