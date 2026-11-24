@@ -1,11 +1,10 @@
 /* Daggers · Finding detail — the evidence (plan Scenarios 3 + 6).
    Side-by-side evidence, reason chips, score breakdown, facts, timeline,
-   FILE REPORT → reports API → toast "We got you." */
+   automatic zero-PII police-portal dossier for actionable findings. */
 import { t, timeAgo, fmtDateTime, localized, reasonsOf } from "../i18n/i18n.js";
-import { getFinding, fileReport, getReports, setFindingLabel, tagFor } from "../api.js";
+import { getFinding, getReports, setFindingLabel, tagFor } from "../api.js";
 import { el, tagChip, chip, reasonChip, breakdown } from "../components/tag.js";
 import { evidenceFrame } from "../components/evidence.js";
-import { toastFiled } from "../components/toast.js";
 import { cardsSkeleton } from "../components/skeleton.js";
 import { emptyState } from "../components/empty.js";
 import { pageHead, card, kv, stack } from "./_shared.js";
@@ -112,41 +111,27 @@ export default async function Finding(ctx) {
   }
   const timelineCard = card(t("finding.timelineTitle"), "", tl);
 
-  /* report card */
+  /* automatic dossier card */
   const reportCard = el("section", { class: "card", style: "border-color:var(--accent); background:var(--accent-tint)" });
   reportCard.append(
     el("div", { class: "card-title" }, el("span", { text: t("finding.reportTitle") })),
     el("p", { style: "font-size:var(--fs-sm)", text: t("finding.reportBody") }),
   );
   if (existing) {
-    const btn = el("button", { class: "btn btn-ink btn-block", style: "margin-block-start:var(--s3)" },
+    const statusClass = existing.status === "SUBMITTED" || existing.status === "SEEN" ? "btn-ink" : "btn-primary";
+    const open = el("a", { class: `btn ${statusClass} btn-block`, href: `#/portal/${existing.id}` },
       el("span", { html: icons.portal({ size: 18 }) }),
-      document.createTextNode(t("finding.reportFiledBtn")));
-    btn.addEventListener("click", () => { location.hash = `#/portal/${existing.id}`; });
-    reportCard.append(btn);
+      document.createTextNode(t("finding.reportOpenBtn")));
+    reportCard.append(open);
     reportCard.append(el("p", { class: "muted mono", style: "font-size:var(--fs-xs); margin-block-start:var(--s2)",
       text: t("finding.reportFiled", { status: t(`portal.${existing.status.toLowerCase()}`) }) }));
   } else {
-    const btn = el("button", { class: "btn btn-primary btn-lg btn-block", style: "margin-block-start:var(--s3)" },
-      el("span", { html: icons.doc({ size: 18 }) }),
-      document.createTextNode(t("finding.reportBtn")));
-    btn.addEventListener("click", async () => {
-      btn.disabled = true;
-      btn.lastChild.textContent = t("finding.filing");
-      try {
-        const r = await fileReport(f.id);
-        toastFiled();
-        btn.replaceWith(el("a", { class: "btn btn-ink btn-block", href: `#/portal/${r.id}` },
-          el("span", { html: icons.portal({ size: 18 }) }),
-          document.createTextNode(t("finding.reportFiledBtn"))));
-      } catch {
-        btn.disabled = false;
-        btn.lastChild.textContent = t("finding.reportBtn");
-        const { errorCard } = await import("../components/empty.js");
-        reportCard.append(errorCard({ title: t("common.errorTitle"), body: t("common.errorBody") }));
-      }
-    });
-    reportCard.append(btn);
+    const actionable = ["SUSPICIOUS", "MISLEADING", "MALICIOUS"].includes(f.verdict);
+    reportCard.append(el("p", {
+      class: "mono",
+      style: "font-size:var(--fs-xs); margin-block-start:var(--s3)",
+      text: actionable ? t("finding.autoPending") : t("finding.autoNotActionable"),
+    }));
   }
 
   grid.append(left, right);

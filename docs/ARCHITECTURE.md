@@ -23,7 +23,7 @@ One Python 3.11+ FastAPI process serves REST, SSE, the static `web/` PWA, static
                          │       ▼                 ▼                ▼    │
                          │ db/repo.py        reports/**          api/**   │
                          │ SQLite WAL        zero-PII C4         C1/C2/C6 │
-                         │ empty-on-boot     autofile rule      SSE/REST  │
+                         │ empty-on-boot   auto-dossier rule    SSE/REST  │
                          └──────────────────────────────────────────────┘
                                      │
                                      ▼
@@ -44,7 +44,7 @@ One Python 3.11+ FastAPI process serves REST, SSE, the static `web/` PWA, static
 
 ## Five flows
 
-1. **Radar**: CT row → normalize → enrichment → triage → `core.scorer` → *(optional) real evidence JPG* → finding → SSE → auto-file → Guard JSONL. Disabled by default; enable per adapter flag.
+1. **Radar**: CT row → normalize → enrichment → triage → `core.scorer` → *(optional) real evidence JPG* → finding → SSE → automatic portal dossier → Guard JSONL. Disabled by default; enable per adapter flag.
 2. **Checker**: `POST /api/scan` → URL/text/number rules → exact `ScanResult`. No network call; the input is echoed, never persisted.
 3. **Sweep**: `POST /api/sweep` with a canonical `query_id` (or a free-text query when `SWEEP_ALLOW_ARBITRARY=1`) → Search/Maps adapter → same brain → rows persisted, `source_kind` honestly `live` or `unconfigured`.
 4. **Report → AI**: `reports/builder.py` builds the C4 evidence bundle from a C1 Finding. `api/ai.py` streams an explanation built solely from that bundle; AI never writes `verdict`, `score`, or `reasons`.
@@ -76,7 +76,7 @@ One Python 3.11+ FastAPI process serves REST, SSE, the static `web/` PWA, static
 | `channels/**` | sweep engine, Search/Maps adapters, official-registry verification | in-process `core.scorer`, persisted via `repo.py` |
 | `channels/official/**` | human-approved registry of official domains (CLI: approve/revoke/verify/fetch) | feeds S2 identity checks when approved |
 | `db/**` | SQLite schema + repository; the only SQL | `schema.sql` |
-| `reports/**` | C4 builder (zero-PII), queue, auto-file rule | `finding_id` → evidence bundle |
+| `reports/**` | C4 builder (zero-PII), queue, automatic dossier policy | `finding_id` → evidence bundle |
 | `ai/**` | provider chain (Gemini → Groq → template), prompt builder, evidence-only filter | `Report.evidence` in, text out |
 | `api/**` | health, findings, scan, stream, sweep, guard, reports, AI, examples | thin HTTP adapters |
 | `web/**` | bilingual (EN/AR, RTL) PWA, service worker, i18n catalogs | fetches/SSE against same origin |

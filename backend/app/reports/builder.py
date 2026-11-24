@@ -5,7 +5,7 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
-from ..core.verdicts import MALICIOUS
+from ..core.verdicts import MALICIOUS, MISLEADING, SUSPICIOUS
 
 FINDING_KEYS = frozenset(
     {
@@ -119,20 +119,35 @@ def build_report(
     return report
 
 
+ALERT_VERDICTS = {SUSPICIOUS, MISLEADING, MALICIOUS}
+
+
 def autofile_eligible(
     finding: dict,
     clone_min: float = 90.0,
     confirmed_context: Mapping[str, object] | None = None,
 ) -> bool:
-    """Only confirmed fakes may auto-file. A brand token alone is not enough.
+    """Auto-create a zero-PII portal dossier for every actionable finding.
 
-    Confirmed means either an operator-established clone of the official page,
-    or a first-party phishing-feed confirmation passed through the radar.
-    Brand-only lexical weight never qualifies for an automatic police report.
+    This deliberately creates an internal queued police-portal report for
+    WARNING and above. It does not authorize sending weak or unconfirmed
+    reports to an external police intake (see external_submission_eligible).
     """
-    if finding.get("verdict") != MALICIOUS:
+    return str(finding.get("verdict") or "").upper() in ALERT_VERDICTS
+
+
+def external_submission_eligible(
+    finding: dict,
+    clone_min: float = 90.0,
+    confirmed_context: Mapping[str, object] | None = None,
+) -> bool:
+    """Only strongly corroborated MALICIOUS dossiers may leave the portal."""
+    if str(finding.get("verdict") or "").upper() != MALICIOUS:
         return False
     if float(finding.get("clone") or 0) >= clone_min:
         return True
     context = confirmed_context or {}
-    return bool(context.get("phishtank_confirmed"))
+    if bool(context.get("phishtank_confirmed")):
+        return True
+    reasons = " ".join(str(reason).lower() for reason in (finding.get("reasons") or []))
+    return "phishing url feed" in reasons or "phishtank" in reasons

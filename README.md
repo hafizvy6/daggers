@@ -123,7 +123,7 @@ An empty database returns `[]` — not a sample.
 | GET | `/api/guard/blocklist.txt` | 0.0.0.0-prefixed host list for the sync script |
 | GET | `/api/examples` | canonical sweep query presets (no sample findings/numbers) |
 | POST | `/api/sweep` | run a canonical/allowed query; empty `results` when unconfigured |
-| POST | `/api/reports` | build/file a zero-PII report from a real finding id |
+| POST | `/api/reports` | removed (410); actionable findings auto-queue a zero-PII dossier |
 | POST | `/api/report/{id}/analysis`, `/api/report/{id}/takedown` | streamed AI explainer / deterministic template |
 
 `GuardRow`: `{"domain":"...","verdict":"MALICIOUS","reason":"...","flagged_at":"..."}`
@@ -153,7 +153,7 @@ Pipeline: **S0 normalize → S1 lexical → S2 identity → S3 claims → S4 vis
 | Visual clone ≥90% with brand hit | +0.60 |
 | Foreign form action / payment fields / obfuscated script | +0.30 / +0.25 / +0.15 |
 
-`score = clamp(sum, 0, 1)`; `MALICIOUS ≥ 0.65`, `SUSPICIOUS ≥ 0.35`, otherwise `UNKNOWN`. A claim floors the verdict at `MISLEADING`; claim-only cases are also capped at `MISLEADING` so unrelated lexical weight cannot turn an unverifiable claim into a confirmed FAKE. A clone match, confirmed feed label, foreign form action, or payment-harvest fields remove that cap. Auto-file requires `MALICIOUS` plus confirmation (`clone ≥ 90` or a confirmed phishing-feed match); brand-only lexical weight never auto-files. Brand-only exact matches no longer double-count as both typo and URL-token signals; Guard blocks `MALICIOUS` by default, with `GUARD_BLOCK_MISLEADING=1` as a policy flag.
+`score = clamp(sum, 0, 1)`; `MALICIOUS ≥ 0.65`, `SUSPICIOUS ≥ 0.35`, otherwise `UNKNOWN`. A claim floors the verdict at `MISLEADING`; claim-only cases are also capped at `MISLEADING` so unrelated lexical weight cannot turn an unverifiable claim into a confirmed FAKE. A clone match, confirmed feed label, foreign form action, or payment-harvest fields remove that cap. Automatic dossiers are created for every actionable verdict (`SUSPICIOUS` or above); external police intake is still limited to `MALICIOUS` plus confirmation (`clone ≥ 90` or a confirmed phishing-feed match), and requires an authorized endpoint. Brand-only exact matches no longer double-count as both typo and URL-token signals; Guard blocks `MALICIOUS` by default, with `GUARD_BLOCK_MISLEADING=1` as a policy flag.
 
 The bundled catalog has **36 UAE brands** (banks, government, telecoms, airlines, delivery, marketplaces) with EN/AR aliases, plus EN/AR/Arabizi lure lexicons. The reported-number catalog contains 200 deterministic premium/VoIP/repeat-pattern signatures — they are rules, not stored victim data. `tldextract` runs against an offline snapshot resolver with a bundled static suffix fallback.
 

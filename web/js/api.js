@@ -90,12 +90,17 @@ function fetchWithTimeout(resource, opts = {}, ms = 7000) {
     .finally(() => clearTimeout(timer));
 }
 
-function requireOk(response) {
-  if (!response.ok) {
-    const error = new Error(`HTTP ${response.status}`);
-    error.status = response.status;
-    throw error;
-  }
+async function parseError(response) {
+  let detail = "";
+  try { const body = await response.json(); detail = body?.detail || body?.message || ""; } catch { /* non-JSON error body */ }
+  const error = new Error(detail || `HTTP ${response.status}`);
+  error.status = response.status;
+  error.detail = detail;
+  return error;
+}
+
+async function requireOk(response) {
+  if (!response.ok) throw await parseError(response);
   return response;
 }
 
@@ -118,13 +123,14 @@ function fallbackValue(fallback) {
 async function getJson(path, { cacheName, fallback = null, timeout = 7000 } = {}) {
   try {
     const response = await fetchWithTimeout(url(path), {}, timeout);
-    requireOk(response);
+    await requireOk(response);
     const data = await response.json();
     setAvailable();
     if (cacheName) cacheSet(cacheName, data);
     return data;
   } catch (error) {
-    if (error?.name !== "AbortError") setUnavailable();
+    // A 4xx is a client error, not an outage — never flip the app to "unavailable" for it.
+    if (error?.name !== "AbortError" && (!error?.status || error.status >= 500)) setUnavailable();
     const saved = cacheName ? cacheGet(cacheName) : null;
     return saved !== null ? saved : fallbackValue(fallback);
   }
@@ -138,12 +144,12 @@ async function postJson(path, body, { timeout = 9000, signal } = {}) {
       body: JSON.stringify(body),
       signal,
     }, timeout);
-    requireOk(response);
+    await requireOk(response);
     const data = await response.json();
     setAvailable();
     return data;
   } catch (error) {
-    if (error?.name !== "AbortError") setUnavailable();
+    if (error?.name !== "AbortError" && (!error?.status || error.status >= 500)) setUnavailable();
     throw error;
   }
 }
@@ -163,7 +169,7 @@ export async function getFinding(id) {
   try {
     const response = await fetchWithTimeout(url(`/api/finding/${id}`), {}, 7000);
     if (response.status === 404) { setAvailable(); return null; }
-    requireOk(response);
+    await requireOk(response);
     const data = await response.json();
     setAvailable();
     cacheSet(`finding:${id}`, data);
@@ -188,10 +194,6 @@ export async function getReports() {
   const reports = Array.isArray(data) ? data : (data.reports || []);
   reports.forEach((report) => { if (report.evidence) withEvidenceUrl(report.evidence); });
   return reports;
-}
-
-export async function fileReport(findingId) {
-  return postJson("/api/reports", { finding_id: findingId });
 }
 
 export async function advanceReport(id, to) {

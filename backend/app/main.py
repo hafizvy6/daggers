@@ -17,8 +17,9 @@ from fastapi.staticfiles import StaticFiles
 from .api import examples, findings, health, scan, stream
 from .catalog import load_catalogs
 from .config import Heartbeats, Settings
-from .core import scorer
+from .core import scorer, verdicts
 from .db.repo import Repository
+from .radar.enrich import parse_age_hours
 from .radar.pipeline import RadarPipeline
 from .reports.intake import PoliceIntakeClient
 from .reports.queue import ReportQueue
@@ -100,8 +101,75 @@ class Runtime:
         self.repo.initialize()
         self.repo.set_meta("mode", self.mode)
         self.repo.set_meta("schema_version", "1")
+        self._reconcile_finding_verdicts()
+        self._backfill_automatic_dossiers()
         self.heartbeats.mark("pipeline")
         await self.pipeline.start()
+
+    def _reconcile_finding_verdicts(self) -> None:
+        """Bring historical verdicts in line with the current evidence rules.
+
+        This recalculates already-stored radar findings without network calls. A
+        finding downgraded below its previous verdict has its old composed
+        evidence invalidated because that image embedded the superseded claim.
+        """
+        changed = 0
+        for row in self.repo.list_findings_for_reconciliation(limit=5000):
+            l1 = row.get("l1_detail") or {}
+            context = {
+                "cert_age_hours": parse_age_hours(row.get("cert_issued")),
+                "clone_score": float(row.get("clone") or 0),
+                "phishtank_confirmed": "feeds.phishtank_confirmed" in l1,
+                "form_action_mismatch": "content.form_action_mismatch" in l1,
+                "payment_harvest_fields": "content.payment_harvest_fields" in l1,
+                "obfuscated_script": "content.obfuscated_script" in l1,
+            }
+            result = scorer.score_url(
+                f"https://{row['domain']}/",
+                brands=list(self.catalog.brands),
+                lures={key: list(value) for key, value in self.catalog.lures.items()},
+                context=context,
+                suffix_resolver=self.catalog.suffix_resolver,
+                text=str(row["domain"]),
+                thresholds=self.settings.thresholds,
+            )
+            old_verdict = str(row.get("verdict") or "UNKNOWN").upper()
+            new_verdict = str(result.verdict).upper()
+            reasons_changed = list(row.get("reasons") or []) != list(result.reasons)
+            if old_verdict == new_verdict and abs(float(row.get("score") or 0) - result.score) < 0.0001 and not reasons_changed:
+                continue
+            old_rank = verdicts.RANK.get(old_verdict, 0)
+            new_rank = verdicts.RANK.get(new_verdict, 0)
+            self.repo.update_finding_analysis(
+                int(row["id"]),
+                score=result.score,
+                verdict=new_verdict,
+                reasons=result.reasons,
+                l1_detail=result.l1_detail,
+                clone_score=context["clone_score"],
+                rendered=False if new_rank < old_rank else None,
+            )
+            if new_rank < old_rank:
+                self.repo.clear_evidence(int(row["id"]))
+            changed += 1
+        if changed:
+            logger.info("reconciled %s historical radar verdict(s)", changed)
+
+    def _backfill_automatic_dossiers(self) -> None:
+        """Create portal dossiers for pre-existing actionable findings once."""
+        created = 0
+        for row in self.repo.list_findings_for_reconciliation(limit=5000):
+            if str(row.get("verdict") or "UNKNOWN").upper() not in {"SUSPICIOUS", "MISLEADING", "MALICIOUS"}:
+                continue
+            if self.repo.report_exists(int(row["id"])):
+                continue
+            contract = self.repo.get_finding(int(row["id"]))
+            if not contract:
+                continue
+            report = self.report_queue.maybe_auto_file(contract)
+            created += 1 if report else 0
+        if created:
+            logger.info("backfilled %s automatic police-portal dossier(s)", created)
 
     async def stop(self) -> None:
         await self.pipeline.stop()
