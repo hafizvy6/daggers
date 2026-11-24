@@ -11,7 +11,7 @@ import urllib.error
 import urllib.request
 from urllib.parse import urlsplit
 
-PROVIDER_HOSTS = frozenset({"google.serper.dev", "html.duckduckgo.com", "places.googleapis.com"})
+PROVIDER_HOSTS = frozenset({"google.serper.dev", "html.duckduckgo.com", "places.googleapis.com", "nominatim.openstreetmap.org"})
 USER_AGENT = "Daggers-Research/1.0"
 
 

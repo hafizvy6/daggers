@@ -76,7 +76,7 @@ make check            # compileall + i18n/design gate + node syntax + extension 
 | `ENRICH_ENABLED` | RDAP/DNS/TLS/favicon enrichment per finding | none |
 | `RENDER_ENABLED` | Playwright screenshot + clone compare + real evidence | needs `make install-render` |
 | `SEARCH_LIVE_ENABLED` | Sweep Search channel: Serper if keyed, else DuckDuckGo HTML | `SERPER_API_KEY` (optional) |
-| `MAPS_LIVE_ENABLED` | Sweep Maps channel: Google Places Text Search | `GOOGLE_PLACES_API_KEY` (required) |
+| `MAPS_LIVE_ENABLED` | Sweep Maps channel; keyless via OpenStreetMap/Nominatim when enabled | `GOOGLE_PLACES_API_KEY` (optional — enables Google Places first) |
 
 ### Sweep abuse controls
 
@@ -136,8 +136,10 @@ Typed search is accepted by default (`SWEEP_ALLOW_ARBITRARY=1`), but **a query g
 # Search: either keyless DuckDuckGo HTML…
 SEARCH_LIVE_ENABLED=1
 # …or Serper (Google results): set SERPER_API_KEY and keep SEARCH_LIVE_ENABLED=1
-# Maps: authorized Google Places key is mandatory
-MAPS_LIVE_ENABLED=1 GOOGLE_PLACES_API_KEY=...
+# Maps: keyless OpenStreetMap (no key needed)…
+MAPS_LIVE_ENABLED=1
+# …or upgrade to Google Places with an authorized key (used automatically when set):
+# MAPS_LIVE_ENABLED=1 GOOGLE_PLACES_API_KEY=...
 ```
 
 Canonical queries live in `backend/app/channels/queries.yaml` and are served at `GET /api/examples`. The PWA pills use those by id. Typed searches are accepted by default; operators who prefer a closed proxy set `SWEEP_ALLOW_ARBITRARY=0`, in which case free-text is rejected with 403.
