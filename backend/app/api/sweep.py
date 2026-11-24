@@ -80,6 +80,39 @@ async def create_sweep(payload: SweepRequest, request: Request):
         raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
 
 
+@router.get("/api/sweep/selfcheck")
+def selfcheck(request: Request):
+    """Run ONE real provider call per configured adapter and report the outcome.
+
+    Diagnostics for "sweep is empty": reveals egress/key/provider failures on the
+    host running the app. Response contains provider names and outcome types
+    only — never keys, URLs with secrets, or victim data. Rate-limited like a
+    sweep, one fixed benign query, nothing persisted.
+    """
+    service = get_service(request)
+    client = request.client.host if request.client else "unknown"
+    try:
+        service.limiter.check(client)
+    except SweepError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+    query = "brief news check"
+    out = {"query": query, "search": [], "maps": [], "live": None}
+    for provider in service.search.providers:
+        try:
+            rows = provider.search(query, "en", 3)
+            out["search"].append({"name": provider.name, "outcome": "ok", "results": len(rows)})
+        except Exception as exc:  # ProviderError and friends — report the type, never internals
+            out["search"].append({"name": provider.name, "outcome": "error", "detail": str(exc)[:120] or type(exc).__name__})
+    for provider in service.maps.providers:
+        try:
+            rows = provider.search(query, "en", 3)
+            out["maps"].append({"name": provider.name, "outcome": "ok", "results": len(rows)})
+        except Exception as exc:
+            out["maps"].append({"name": provider.name, "outcome": "error", "detail": str(exc)[:120] or type(exc).__name__})
+    out["live"] = any(p["outcome"] == "ok" for p in out["search"] + out["maps"])
+    return out
+
+
 @router.get("/api/sweep/{run_id}")
 async def get_sweep(run_id: int, request: Request):
     result = get_service(request).get(run_id)
