@@ -185,7 +185,12 @@
     "notSureBtn": "Open the Checker",
     "noQueries": "No canonical queries are available from the service.",
     "unconfiguredBody": "No live search or Maps provider is configured. Enable one in the backend environment, then run the sweep again.",
-    "noResultsBody": "The live provider returned no results. Try another canonical query."
+    "noResultsBody": "The live provider returned no results. Try another canonical query.",
+    "freeTextOffPlaceholder": "Free-text is off — pick a preset below",
+    "freeTextOffTitle": "Free-text search is disabled on this server",
+    "freeTextOffBody": "This server runs only the canonical queries above (SWEEP_ALLOW_ARBITRARY=0). Ask your operator to set SWEEP_ALLOW_ARBITRARY=1 to type searches — they stay PII-filtered and rate-limited.",
+    "rateLimitedTitle": "Too many sweeps",
+    "rateLimitedBody": "You hit the per-IP limit (6 per minute). Try again in a minute — or pick a preset below."
   },
   "check": {
     "kicker": "The Checker",
