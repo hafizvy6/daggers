@@ -45,6 +45,9 @@ def test_offer_without_entity_is_not_a_claim(catalog):
     assert signal is None
 
 
-def test_entity_without_offer_is_not_a_claim(catalog):
+def test_entity_without_offer_is_now_phishing_intent(catalog):
     signal = evaluate("please verify your account with the bank", catalog)
-    assert signal is None
+    assert signal is not None
+    assert signal.forced_min == "SUSPICIOUS"
+    assert signal.scam_type == "phishing-intent"
+    assert "verify_pressure" in signal.matched_patterns

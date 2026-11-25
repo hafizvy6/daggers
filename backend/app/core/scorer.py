@@ -390,11 +390,12 @@ def _infer_scam_type(
     signals: list[Signal],
     context: Mapping[str, object],
     brand_hit: bool,
+    claim_scam_type: str | None = None,
 ) -> str | None:
     names = {signal.name for signal in signals}
     has_confirmation = bool(names & CONFIRMATION_SIGNALS)
     if claim_hit and not has_confirmation:
-        return "unverifiable-giveaway-claim"
+        return claim_scam_type or "unverifiable-giveaway-claim"
     if "vision.clone_ge_90" in names and brand_hit:
         return "fake-banking-login"
     if "feeds.phishtank_confirmed" in names:
@@ -404,7 +405,7 @@ def _infer_scam_type(
     if "content.payment_harvest_fields" in names or "content.form_action_mismatch" in names:
         return "credential-harvesting"
     if claim_hit:
-        return "claim-with-confirmed-evidence"
+        return claim_scam_type or "claim-with-confirmed-evidence"
     if "lexical.lure_keyword" in names:
         return "lure-link"
     if context.get("clone_score"):
@@ -477,7 +478,7 @@ def score_url(
         homograph=audit.as_dict(),
         brand_hit=brand_hit,
         claim_hit=claim_hit,
-        scam_type=_infer_scam_type(claim_hit, audit, signals, context, brand_hit),
+        scam_type=_infer_scam_type(claim_hit, audit, signals, context, brand_hit, claim.scam_type if claim else None),
     )
 
 

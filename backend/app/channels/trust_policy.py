@@ -133,6 +133,8 @@ def decide(
                 "strong malicious signals on an authenticated official domain — possible compromise or "
                 "fraudulent hosted content; escalate for manual review (not auto-labelled FAKE)"
             )
+        elif gov_claim and gov_status == VERIFIED:
+            reasons.append("government claim on this official domain is verified by approved sources")
         elif maliciousness.content_flags or (
             maliciousness.ws1_verdict != WS1_UNKNOWN and not maliciousness.domain_name_only
         ):
