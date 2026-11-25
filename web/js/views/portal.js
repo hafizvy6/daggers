@@ -97,7 +97,7 @@ export default async function Portal(ctx) {
           el("span", { class: "ltr", text: r.domain || r.evidence?.domain || "—" }),
           r.auto ? el("span", { class: "auto-chip", text: t("portal.auto") }) : null,
           el("span", { class: "cell-sub mono ltr", text: r.filed_at ? timeAgo(r.filed_at) : "—" })),
-        el("td", {}, tagChip(tagFor(r.evidence?.verdict || "MALICIOUS"))),
+        el("td", {}, tagChip(tagFor(r.evidence?.verdict || "MALICIOUS", r.evidence))),
         el("td", {}, stepper(r.status, true)),
         el("td", { class: "mono ltr", text: fmtNum(r.blocked_hits ?? 0) }),
       );
@@ -121,7 +121,7 @@ export default async function Portal(ctx) {
     detailHost.replaceChildren();
     if (!r) return;
     const ev = r.evidence || {};
-    const tagKey = tagFor(ev.verdict || "MALICIOUS");
+    const tagKey = tagFor(ev.verdict || "MALICIOUS", ev);
 
     const head = el("section", { class: "card" });
     head.append(

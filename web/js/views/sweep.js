@@ -98,7 +98,7 @@ export default async function Sweep() {
     const rows = el("div", { class: "sweep-results" });
     resultsHost.replaceChildren(rows);
 
-    const bad = data.results.filter((r) => tagFor(r.verdict) === "fake" || tagFor(r.verdict) === "misleading").length;
+    const bad = data.results.filter((r) => tagFor(r.verdict, r) === "fake" || tagFor(r.verdict, r) === "misleading").length;
     const counter = el("div", { class: "card tight", style: "border:0; box-shadow:none; border-block-end:1px solid var(--line-soft); display:flex; gap:var(--s3); align-items:center" },
       el("span", { class: "mono", style: "font-size:var(--fs-xs); color:var(--ink-muted)", text: t("sweep.resultsCount", { n: data.results.length, bad }) }));
     rows.append(counter);
@@ -131,7 +131,7 @@ export default async function Sweep() {
   }
 
   function buildRow(r, scored) {
-    const tagKey = tagFor(r.verdict);
+    const tagKey = tagFor(r.verdict, r);
     const row = el("div", { class: `sweep-row${scored && (tagKey === "fake") ? " is-fake" : scored && tagKey === "misleading" ? " is-mislead" : scored && tagKey === "warning" ? " is-warn" : ""}` });
     const isMaps = channel === "maps" && r.listing;
     row.append(

@@ -64,7 +64,7 @@ export default async function NumberView() {
 }
 
 function numberCard(res) {
-  const tagKey = tagFor(res.verdict);
+  const tagKey = tagFor(res.verdict, res);
   const c = el("section", { class: "card" });
   const titleKey = tagKey === "safe" ? "number.cleanTitle" : tagKey === "unknown" ? "number.cleanTitle" : "number.knownTitle";
   c.append(el("div", { class: "row", style: "justify-content:space-between" },

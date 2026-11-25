@@ -49,7 +49,11 @@ class Catalog:
 
     @property
     def official_domains(self) -> tuple[str, ...]:
-        return tuple(str(brand["official_domain"]).lower() for brand in self.brands)
+        domains: list[str] = []
+        for brand in self.brands:
+            domains.append(str(brand["official_domain"]).lower())
+            domains.extend(str(d).lower() for d in brand.get("official_domains", []))
+        return tuple(dict.fromkeys(d for d in domains if d))
 
     @property
     def radar_terms(self) -> tuple[str, ...]:
@@ -113,6 +117,7 @@ def load_catalogs(core_dir: Path | None = None) -> Catalog:
             {
                 "token": str(item["token"]).lower(),
                 "official_domain": str(item["official_domain"]).lower(),
+                "official_domains": [str(d).lower() for d in item.get("official_domains", []) if str(d).strip()],
                 "aliases": [str(alias).lower() for alias in item.get("aliases", [])],
                 "radar_terms": [str(term).lower() for term in item.get("radar_terms", [])],
             }

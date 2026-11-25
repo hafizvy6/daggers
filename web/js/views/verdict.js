@@ -22,7 +22,7 @@ export default async function VerdictPage(ctx) {
     root.append(emptyState({ title: t("common.notFoundTitle"), body: t("common.notFoundBody") }));
     return root;
   }
-  const tagKey = tagFor(finding.verdict);
+  const tagKey = tagFor(finding.verdict, finding);
   const c = el("section", { class: "card", style: "border-width:3px" });
   c.append(
     el("div", { class: "row", style: "justify-content:space-between" },

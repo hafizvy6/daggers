@@ -37,7 +37,7 @@ export default async function Finding(ctx) {
     return root;
   }
 
-  const tagKey = tagFor(f.verdict);
+  const tagKey = tagFor(f.verdict, f);
   const reports = await getReports().catch(() => []);
   const existing = reports.find((r) => r.finding_id === f.id);
 

@@ -438,7 +438,12 @@ def score_url(
 ) -> ScoreResult:
     """S0–S3 + S5 + S6. Pure: all I/O (feeds, enrichment, vision) arrives via context."""
     context = dict(context or {})
-    official_domains = tuple(str(brand["official_domain"]).lower() for brand in brands)
+    official_domains = tuple(
+        d.lower()
+        for brand in brands
+        for d in [str(brand.get("official_domain", "")).lower(), *(str(x).lower() for x in brand.get("official_domains", []))]
+        if d
+    )
     norm = normalize_url(raw_url, suffix_resolver)
     audit = homograph.audit(norm.unicode_host, official_domains, norm.registrable_domain)
     is_official = any(homograph.is_official_host(norm.unicode_host, domain) for domain in official_domains)
@@ -446,7 +451,7 @@ def score_url(
         return ScoreResult(
             score=0.0,
             verdict=UNKNOWN,
-            reasons=["matches official domain allowlist"],
+            reasons=["authenticated official domain"],
             normalized=norm.as_dict(),
             homograph=audit.as_dict(),
             scam_type=None,
@@ -500,7 +505,12 @@ def _score_claim_only(
     brands: list[dict] | tuple[dict, ...],
     thresholds: Mapping[str, float] | None,
 ) -> ScoreResult:
-    official_domains = tuple(str(brand["official_domain"]).lower() for brand in brands)
+    official_domains = tuple(
+        d.lower()
+        for brand in brands
+        for d in [str(brand.get("official_domain", "")).lower(), *(str(x).lower() for x in brand.get("official_domains", []))]
+        if d
+    )
     claim = claim_engine.evaluate_claims(text, "", list(brands), official_domains)
     if not claim:
         return ScoreResult(

@@ -74,7 +74,7 @@ export default async function Guard() {
 
   /* feed preview */
   let findings = [];
-  try { findings = (await getFeed()).filter((f) => tagFor(f.verdict) === "fake").slice(0, 6); } catch { /* ignore */ }
+  try { findings = (await getFeed()).filter((f) => tagFor(f.verdict, f) === "fake").slice(0, 6); } catch { /* ignore */ }
   const list = el("div", { class: "feed-list" });
   findings.forEach((f) => {
     list.append(el("a", { class: "feed-row", href: `#/finding/${f.id}`, style: "grid-template-columns:18px minmax(0,1fr) auto" },

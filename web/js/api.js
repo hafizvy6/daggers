@@ -383,4 +383,10 @@ export const VERDICT_TAG = {
   MALICIOUS: "fake", SUSPICIOUS: "warning", MISLEADING: "misleading",
   SAFE: "safe", UNKNOWN: "unknown", QUEUED: "warning",
 };
-export const tagFor = (verdict) => VERDICT_TAG[String(verdict || "").toUpperCase()] || "unknown";
+export const tagFor = (verdict, result) => {
+  const v = String(verdict || "").toUpperCase();
+  if (v === "UNKNOWN" && Array.isArray(result?.reasons) && result.reasons.some((r) => /official domain allowlist|authenticated official domain/i.test(String(r)))) {
+    return "safe";
+  }
+  return VERDICT_TAG[v] || "unknown";
+};

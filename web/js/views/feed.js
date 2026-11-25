@@ -54,7 +54,7 @@ export default async function Feed(ctx) {
   paintTabs();
 
   function rowFor(f, isNew) {
-    const tagKey = tagFor(f.verdict);
+    const tagKey = tagFor(f.verdict, f);
     const a = el("a", { class: `feed-row${isNew ? " is-new" : ""}`, href: `#/finding/${f.id}`, "data-id": f.id });
     a.append(
       dot(tagKey),
@@ -73,7 +73,7 @@ export default async function Feed(ctx) {
   function paintList(newIds = new Set()) {
     const shown = findings.filter((f) => {
       if (filter === "all") return true;
-      const tag = tagFor(f.verdict);
+      const tag = tagFor(f.verdict, f);
       return filter === "suspicious" ? tag === "warning" || tag === "misleading" : tag === filter;
     });
     document.getElementById("feedCount") && (document.getElementById("feedCount").textContent = t("feed.count", { n: fmtNum(shown.length) }));
