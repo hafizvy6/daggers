@@ -35,6 +35,21 @@ ENTITY_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
 )
 
 
+def _fold_patterns(patterns: tuple[tuple[str, re.Pattern[str]], ...]) -> tuple[tuple[str, re.Pattern[str]], ...]:
+    folded: list[tuple[str, re.Pattern[str]]] = []
+    for label, pattern in patterns:
+        try:
+            folded.append((label, re.compile(confusable_fold(pattern.pattern), pattern.flags)))
+        except re.error:
+            folded.append((label, pattern))
+    return tuple(folded)
+
+
+OFFER_PATTERNS = _fold_patterns(OFFER_PATTERNS)
+INTENT_PATTERNS = _fold_patterns(INTENT_PATTERNS)
+ENTITY_PATTERNS = _fold_patterns(ENTITY_PATTERNS)
+
+
 def _brand_tokens(brands: list[dict] | tuple[dict, ...]) -> tuple[str, ...]:
     tokens: list[str] = []
     for brand in brands:

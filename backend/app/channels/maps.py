@@ -1,4 +1,4 @@
-"""Maps channel adapter (authorized Google Places only).
+"""Maps channel adapter (authorized Google Places or OpenStreetMap Nominatim fallback).
 
 Each listing gets SEPARATE evidence for three checks:
   * identity — does the listing name claim a government entity / known brand, and
@@ -10,8 +10,9 @@ Missing business information is reported as ``not_provided``; it is never
 treated as evidence of fraud. Listing data is business data from a third-party
 listing; no personal or victim information is accepted or stored.
 
-Live Google Places is used only when MAPS_LIVE_ENABLED=1 and
-GOOGLE_PLACES_API_KEY is set (server-side env only — never in the extension).
+Live Google Places is used when MAPS_LIVE_ENABLED=1 and GOOGLE_PLACES_API_KEY
+is set (server-side env only — never in the extension). Otherwise an
+OpenStreetMap Nominatim fallback is used so maps work without keys.
 """
 from __future__ import annotations
 
@@ -19,6 +20,7 @@ import json
 import os
 from dataclasses import dataclass
 from typing import Callable
+from urllib.parse import urlencode
 
 from ..core import numbers as ws1_numbers
 from ..core import homograph
@@ -73,11 +75,62 @@ class GooglePlacesProvider:
         ]
 
 
+class NominatimProvider:
+    name, source_kind = "openstreetmap", "live"
+
+    def __init__(self, http: Callable = http_request) -> None:
+        self.http = http
+
+    def search(self, query: str, lang: str, limit: int) -> list[Listing]:
+        params = urlencode({
+            "q": query,
+            "format": "jsonv2",
+            "addressdetails": "1",
+            "extratags": "1",
+            "limit": str(max(1, min(limit, MAX_LISTINGS))),
+            "accept-language": lang or "en",
+        })
+        body = self.http(
+            f"https://nominatim.openstreetmap.org/search?{params}",
+            headers={"Accept-Language": lang or "en"},
+        )
+        data = json.loads(body)
+        if not isinstance(data, list):
+            return []
+        listings: list[Listing] = []
+        for p in data[:limit]:
+            if not isinstance(p, dict):
+                continue
+            extratags = p.get("extratags") or {}
+            if not isinstance(extratags, dict):
+                extratags = {}
+            name = str(extratags.get("name") or extratags.get("brand") or p.get("name") or "").strip()
+            display = str(p.get("display_name") or "").strip()
+            if not name:
+                name = display.split(",")[0].strip() if display else "Unknown place"
+            website = extratags.get("website") or extratags.get("contact:website") or extratags.get("url")
+            phone = extratags.get("phone") or extratags.get("contact:phone") or extratags.get("contact:mobile")
+            category = str(p.get("type") or p.get("category") or "")
+            listings.append(Listing(
+                "openstreetmap",
+                str(p.get("place_id") or p.get("osm_id") or ""),
+                name,
+                display,
+                str(website).strip() if website else None,
+                str(phone).strip() if phone else None,
+                category,
+                "",
+            ))
+        return listings
+
+
 def default_maps_providers(env: dict | None = None) -> list:
     env = dict(os.environ if env is None else env)
     providers: list = []
     if env.get("MAPS_LIVE_ENABLED", "0") == "1" and env.get("GOOGLE_PLACES_API_KEY"):
         providers.append(GooglePlacesProvider(env["GOOGLE_PLACES_API_KEY"]))
+    # Free fallback so maps work without an API key.
+    providers.append(NominatimProvider())
     return providers
 
 
