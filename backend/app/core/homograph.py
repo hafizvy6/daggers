@@ -20,45 +20,19 @@ KNOWN_SCRIPTS = (
 
 # Characters that visually impersonate Latin letters. Keys are NFKC + casefold forms.
 CONFUSABLES = {
-    "а": "a",  # Cyrillic a
-    "е": "e",
-    "о": "o",
-    "р": "p",
-    "с": "c",
-    "у": "y",
-    "х": "x",
-    "і": "i",
-    "ѕ": "s",
-    "ԁ": "d",
-    "ց": "g",
-    "һ": "h",
-    "і": "i",
-    "ј": "j",
-    "ԛ": "q",
-    "т": "t",
-    "ν": "v",
-    "ο": "o",  # Greek omicron
-    "α": "a",
-    "ρ": "p",
-    "τ": "t",
-    "ε": "e",
-    "χ": "x",
-    "κ": "k",
-    "μ": "m",
-    "β": "b",
-    "ι": "i",
-    "η": "n",
-    "υ": "u",
-    "ζ": "z",
-    "ı": "i",  # dotless i
-    "ſ": "s",  # long s
-    "ƒ": "f",
-    "ℓ": "l",
-    "ɑ": "a",
-    "ɡ": "g",
-    "ϲ": "c",
-    "ө": "o",
-    "ө": "o",
+    # Cyrillic
+    "а": "a", "е": "e", "о": "o", "р": "p", "с": "c", "у": "y", "х": "x",
+    "і": "i", "ѕ": "s", "ԁ": "d", "ց": "g", "һ": "h", "ј": "j", "ԛ": "q",
+    "т": "t", "в": "b", "к": "k", "м": "m", "н": "h", "л": "l", "п": "n",
+    "г": "r", "ф": "f", "ѵ": "v", "ъ": "b", "ь": "b", "ё": "e", "й": "n",
+    "з": "3", "ч": "4", "ш": "w", "щ": "w", "ю": "o", "я": "r",
+    # Greek
+    "ν": "v", "ο": "o", "α": "a", "ρ": "p", "τ": "t", "ε": "e", "χ": "x",
+    "κ": "k", "μ": "m", "β": "b", "ι": "i", "η": "n", "υ": "u", "ζ": "z",
+    "ω": "w", "σ": "o", "γ": "y", "δ": "d", "π": "n", "θ": "o", "λ": "a",
+    # Other lookalikes
+    "ı": "i", "ſ": "s", "ƒ": "f", "ℓ": "l", "ɑ": "a", "ɡ": "g", "ϲ": "c",
+    "ө": "o", "ø": "o", "ð": "d", "þ": "p", "æ": "ae", "œ": "oe",
 }
 
 MULTI_SUFFIXES = {
@@ -119,11 +93,27 @@ def host_forms(host: str) -> dict[str, object]:
     }
 
 
+DIGIT_CONFUSABLES = {"0": "o", "1": "l", "3": "e", "5": "s", "7": "t"}
+
+
 def confusable_fold(text: str) -> str:
     normalized = unicodedata.normalize("NFKC", text or "").casefold()
     folded_chars: list[str] = []
     for char in normalized:
         folded_chars.append(CONFUSABLES.get(char, char))
+    return "".join(folded_chars)
+
+
+def visual_fold(text: str) -> str:
+    """Like confusable_fold but also maps common digit lookalikes (0->o, 1->l, ...).
+    Use for homograph/spoof detection; do not use for numeric/amount parsing."""
+    normalized = unicodedata.normalize("NFKC", text or "").casefold()
+    folded_chars: list[str] = []
+    for char in normalized:
+        mapped = CONFUSABLES.get(char)
+        if mapped is None:
+            mapped = DIGIT_CONFUSABLES.get(char, char)
+        folded_chars.append(mapped)
     return "".join(folded_chars)
 
 
@@ -229,12 +219,20 @@ def audit(
             continue
         official_unicode = str(host_forms(official)["unicode_host"])
         official_label = official_unicode.split(".")[0]
-        folded_official = confusable_fold(official_unicode)
-        folded_registrable = confusable_fold(registrable)
+        folded_official = visual_fold(official_unicode)
+        folded_registrable = visual_fold(registrable)
+        folded_official_plain = confusable_fold(official_unicode)
+        folded_registrable_plain = confusable_fold(registrable)
         label_match = len(official_label) >= 3 and any(
-            confusable_fold(label) == confusable_fold(official_label) for label in labels
+            visual_fold(label) == visual_fold(official_label) for label in labels
         )
-        if folded_registrable == folded_official or confusable_fold(unicode_host) == folded_official or label_match:
+        if (
+            folded_registrable == folded_official
+            or folded_registrable_plain == folded_official_plain
+            or visual_fold(unicode_host) == folded_official
+            or confusable_fold(unicode_host) == folded_official_plain
+            or label_match
+        ):
             spoofed_domain = official
             reasons.append(f"confusable spoof of {official} (look-alike letters from another alphabet)")
             break

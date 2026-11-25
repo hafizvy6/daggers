@@ -618,14 +618,6 @@ class Repository:
             )
 
     def get_sweep_run(self, run_id: int) -> dict | None:
-        def loads(raw: Any, default: Any) -> Any:
-            if raw is None or raw == "":
-                return default
-            try:
-                return json.loads(raw)
-            except (TypeError, json.JSONDecodeError):
-                return default
-
         with self._lock:
             row = self.conn.execute(
                 "SELECT * FROM sweep_runs WHERE id = ?", (int(run_id),)
@@ -636,6 +628,41 @@ class Repository:
                 "SELECT * FROM sweep_results WHERE run_id = ? ORDER BY position, id",
                 (int(run_id),),
             ).fetchall()
+        return self._sweep_run_from_rows(row, stored)
+
+    def find_latest_sweep_run(
+        self, *, channel: str, query: str | None = None, lang: str | None = None
+    ) -> dict | None:
+        clauses = ["channel = ?"]
+        params: list[Any] = [str(channel)]
+        if query:
+            clauses.append("LOWER(query) = LOWER(?)")
+            params.append(str(query))
+        if lang:
+            clauses.append("lang = ?")
+            params.append(str(lang))
+        where = " AND ".join(clauses)
+        with self._lock:
+            row = self.conn.execute(
+                f"SELECT * FROM sweep_runs WHERE {where} ORDER BY id DESC LIMIT 1",
+                tuple(params),
+            ).fetchone()
+            if row is None:
+                return None
+            stored = self.conn.execute(
+                "SELECT * FROM sweep_results WHERE run_id = ? ORDER BY position, id",
+                (int(row["id"]),),
+            ).fetchall()
+        return self._sweep_run_from_rows(row, stored)
+
+    def _sweep_run_from_rows(self, row: sqlite3.Row, stored: list[sqlite3.Row]) -> dict:
+        def loads(raw: Any, default: Any) -> Any:
+            if raw is None or raw == "":
+                return default
+            try:
+                return json.loads(raw)
+            except (TypeError, json.JSONDecodeError):
+                return default
 
         results: list[dict] = []
         for stored_row in stored:

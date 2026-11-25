@@ -192,7 +192,7 @@ class SweepService:
             "synthetic": False,
             "created_at": meta["created_at"],
             "store": self.store.backend,
-            "counts": _counts([r["tag"] for r in rows]),
+            "counts": _counts([r.get("tag", "SAFE") for r in rows]),
             "errors": errors,
             "results": rows,
         }
