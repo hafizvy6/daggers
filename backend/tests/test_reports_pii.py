@@ -11,6 +11,7 @@ from backend.app.reports.builder import (
     autofile_eligible,
     build_evidence,
     build_report,
+    external_submission_eligible,
     validate_zero_pii,
 )
 from backend.app.reports.queue import ReportQueue
@@ -47,7 +48,7 @@ class FakeRepo:
 
     def insert_report(self, **kwargs):
         report = build_report(
-            FINDING,
+            kwargs.get("evidence", FINDING),
             report_id=len(self.reports) + 7,
             status=kwargs["status"],
             auto=kwargs["auto"],
@@ -108,12 +109,20 @@ def test_contact_like_values_are_rejected():
         validate_zero_pii(bad_phone)
 
 
-def test_autofile_rule_requires_malicious_and_confirmed_proof():
+def test_every_actionable_finding_auto_creates_an_internal_dossier():
     assert autofile_eligible(FINDING) is True
-    assert autofile_eligible({**FINDING, "clone": 0}) is False
-    assert autofile_eligible({**FINDING, "clone": 0}, confirmed_context={"phishtank_confirmed": True}) is True
-    assert autofile_eligible({**FINDING, "clone": 0}, confirmed_context={"form_action_mismatch": True}) is False
-    assert autofile_eligible({**FINDING, "verdict": "SUSPICIOUS"}, confirmed_context={"phishtank_confirmed": True}) is False
+    assert autofile_eligible({**FINDING, "verdict": "SUSPICIOUS"}) is True
+    assert autofile_eligible({**FINDING, "verdict": "MISLEADING"}) is True
+    assert autofile_eligible({**FINDING, "verdict": "UNKNOWN"}) is False
+
+
+def test_external_police_submission_requires_corroboration():
+    assert external_submission_eligible(FINDING, 90) is True
+    assert external_submission_eligible({**FINDING, "clone": 0}, 90) is False
+    assert external_submission_eligible(
+        {**FINDING, "clone": 0, "reasons": ["confirmed in a phishing URL feed"]}, 90
+    ) is True
+    assert external_submission_eligible({**FINDING, "verdict": "SUSPICIOUS"}, 90) is False
 
 
 def test_report_queue_autofiles_and_submits_to_authorized_intake_without_pii():
@@ -131,6 +140,19 @@ def test_report_queue_autofiles_and_submits_to_authorized_intake_without_pii():
     assert intake.calls[0]["evidence"]["domain"] == FINDING["domain"]
     exported = json.loads(queue.export(report["id"]))
     validate_zero_pii(exported)
+
+
+def test_report_queue_does_not_send_weak_warning_dossiers_externally():
+    repo = FakeRepo()
+    intake = FakeIntake()
+    queue = ReportQueue(repo, clone_min=90, intake=intake)
+    report = queue.maybe_auto_file({**FINDING, "verdict": "SUSPICIOUS", "score": 0.55, "clone": 0})
+    assert report is not None
+    import asyncio
+    submitted = asyncio.run(queue.submit_queued())
+    assert submitted == []
+    assert intake.calls == []
+    assert repo.get_report(report["id"])["status"] == "QUEUED"
 
 
 def test_report_queue_keeps_report_queued_when_police_intake_is_not_configured():

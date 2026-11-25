@@ -316,6 +316,60 @@ class Repository:
             ).fetchone()
         return self._row_to_finding(row) if row else None
 
+    def list_findings_for_reconciliation(self, limit: int = 1000) -> list[dict]:
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT f.id, d.domain, f.verdict, f.score, f.reasons, f.l1_detail, "
+                "COALESCE(d.tls_issued, f.created_at) AS cert_issued, d.first_seen, d.source, "
+                "COALESCE(f.clone_score, 0) AS clone, f.evidence_path, f.gallery_match, f.created_at "
+                "FROM findings f JOIN domains d ON d.id = f.domain_id "
+                "ORDER BY f.id ASC LIMIT ?",
+                (max(1, min(int(limit), 5000)),),
+            ).fetchall()
+        results: list[dict] = []
+        for row in rows:
+            reasons = row["reasons"]
+            l1_detail = row["l1_detail"]
+            try:
+                reasons = json.loads(reasons) if isinstance(reasons, str) else reasons
+            except json.JSONDecodeError:
+                reasons = [str(reasons)]
+            try:
+                l1_detail = json.loads(l1_detail) if isinstance(l1_detail, str) else l1_detail
+            except json.JSONDecodeError:
+                l1_detail = {}
+            results.append({
+                "id": int(row["id"]),
+                "domain": str(row["domain"]),
+                "verdict": str(row["verdict"]),
+                "score": float(row["score"]),
+                "reasons": reasons or [],
+                "l1_detail": l1_detail or {},
+                "cert_issued": row["cert_issued"],
+                "first_seen": row["first_seen"],
+                "source": row["source"],
+                "clone": float(row["clone"] or 0),
+                "evidence_url": row["evidence_path"],
+                "gallery_match": row["gallery_match"],
+                "created_at": row["created_at"],
+            })
+        return results
+
+    def clear_evidence(self, finding_id: int) -> None:
+        with self._lock, self.conn:
+            self.conn.execute(
+                "UPDATE findings SET evidence_path = NULL, rendered = 0 WHERE id = ?",
+                (int(finding_id),),
+            )
+
+    def report_exists(self, finding_id: int) -> bool:
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT 1 FROM reports WHERE finding_id = ? LIMIT 1",
+                (int(finding_id),),
+            ).fetchone()
+        return row is not None
+
     def get_findings(
         self,
         limit: int = 50,

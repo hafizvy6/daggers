@@ -52,10 +52,16 @@ async def render_url(
                 args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--disable-blink-features=AutomationControlled"],
             )
             try:
+                # Use a normal browser identity for public pages; a research-only UA is
+                # useful for APIs, but official sites often serve blank shells to it.
+                chrome_ua = (
+                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+                )
                 context = await browser.new_context(
-                    viewport={"width": 1280, "height": 800},
+                    viewport={"width": 1365, "height": 900},
                     accept_downloads=False,
-                    user_agent=settings.http_user_agent,
+                    user_agent=chrome_ua,
                     java_script_enabled=True,
                     locale="en-AE",
                 )
@@ -72,14 +78,20 @@ async def render_url(
                 await page.route("**/*", guard_requests)
                 page.set_default_navigation_timeout(timeout)
                 try:
-                    await page.goto(url, wait_until="domcontentloaded", timeout=timeout)
+                    response = await page.goto(url, wait_until="domcontentloaded", timeout=timeout)
                 except Exception:
                     # Some scams respond late or stream forever. A committed navigation is
                     # enough to capture the first painted page; a blank success is impossible
                     # because the subsequent screenshot must succeed.
-                    await page.goto(url, wait_until="commit", timeout=timeout)
+                    response = await page.goto(url, wait_until="commit", timeout=timeout)
+                if response is not None and int(getattr(response, "status", 200)) >= 400:
+                    return RenderResult(enabled=True, error=f"http-{int(response.status)}")
                 try:
-                    await page.wait_for_load_state("load", timeout=min(5000, timeout))
+                    await page.wait_for_load_state("load", timeout=min(8000, timeout))
+                except Exception:
+                    pass
+                try:
+                    await page.wait_for_load_state("networkidle", timeout=min(8000, timeout))
                 except Exception:
                     pass
                 await page.wait_for_timeout(1500)
@@ -104,7 +116,7 @@ async def render_for_finding(finding: dict, settings: Settings) -> RenderResult:
     return await render_url(url, screenshot, settings=settings)
 
 
-async def render_for_reference(official_domain: str, settings: Settings) -> RenderResult:
+async def render_for_reference(official_domain: str, settings: Settings, *, force: bool = False) -> RenderResult:
     """Capture the real official page used as the left side of an evidence pack."""
     host = str(official_domain).strip().lower().rstrip(".")
     if not host or "://" in host or "/" in host:
@@ -112,7 +124,9 @@ async def render_for_reference(official_domain: str, settings: Settings) -> Rend
     safe = re.sub(r"[^a-z0-9.-]+", "-", host).strip("-") or "official"
     for suffix in (".jpg", ".jpeg", ".png"):
         existing = settings.gallery_dir / f"reference_{safe}{suffix}"
-        if existing.exists():
+        if existing.exists() and not force:
             return RenderResult(enabled=True, screenshot_path=str(existing))
+        if existing.exists() and force:
+            existing.unlink(missing_ok=True)
     screenshot = settings.gallery_dir / f"reference_{safe}.jpg"
     return await render_url(f"https://{host}/", screenshot, settings=settings)
