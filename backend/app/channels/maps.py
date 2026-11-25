@@ -19,7 +19,6 @@ import json
 import os
 from dataclasses import dataclass
 from typing import Callable
-from urllib.parse import urlencode
 
 from ..core import numbers as ws1_numbers
 from ..core import homograph
@@ -33,8 +32,6 @@ PLACES_FIELDS = (
     "places.internationalPhoneNumber,places.primaryType,places.businessStatus"
 )
 MAX_LISTINGS = 10
-
-NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 
 
 @dataclass
@@ -76,80 +73,11 @@ class GooglePlacesProvider:
         ]
 
 
-def _first_tag(tags: dict, *keys: str) -> str | None:
-    for key in keys:
-        value = (tags or {}).get(key)
-        if value:
-            return str(value).strip()
-    return None
-
-
-def parse_nominatim(payload: list | dict, limit: int = MAX_LISTINGS) -> list[Listing]:
-    """Map Nominatim jsonv2 results onto Listing. Pure; used by tests and the provider."""
-    items = payload if isinstance(payload, list) else []
-    listings: list[Listing] = []
-    for item in items[:limit]:
-        if not isinstance(item, dict):
-            continue
-        tags = item.get("extratags") or {}
-        name = str(item.get("name") or "").strip()
-        if not name:
-            # Fall back to the first address segment; never invent a name.
-            display = str(item.get("display_name") or "").strip()
-            name = display.split(",", 1)[0].strip() if display else ""
-        if not name:
-            continue
-        website = _first_tag(tags, "website", "contact:website", "url", "contact:url")
-        if website and "://" not in website:
-            website = "https://" + website
-        phone = _first_tag(tags, "phone", "contact:phone", "contact:telephone", "phone:mobile", "contact:mobile", "mobile")
-        osm_type = str(item.get("osm_type") or "")[:1] or "N"
-        osm_id = str(item.get("osm_id") or item.get("place_id") or "")
-        listings.append(Listing(
-            provider="openstreetmap",
-            place_id=f"{osm_type.upper()}/{osm_id}" if osm_id else f"nominatim:{item.get('place_id', '')}",
-            name=name,
-            address=str(item.get("display_name") or "").strip(),
-            website=website,
-            phone=phone,
-            category=str(item.get("type") or item.get("class") or "").strip(),
-            business_status="",
-            source_kind="live",
-        ))
-    return listings
-
-
-class NominatimProvider:
-    """Keyless OpenStreetMap search. Usage policy: <=1 req/s, identifiable UA, attribution."""
-
-    name, source_kind = "openstreetmap", "live"
-
-    def __init__(self, http: Callable = http_request) -> None:
-        self.http = http
-
-    def search(self, query: str, lang: str, limit: int) -> list[Listing]:
-        url = NOMINATIM_URL + "?" + urlencode({
-            "q": query,
-            "format": "jsonv2",
-            "addressdetails": "1",
-            "extratags": "1",
-            "countrycodes": "ae",
-            "limit": max(1, min(limit, MAX_LISTINGS)),
-            "accept-language": "ar" if lang == "ar" else "en",
-        })
-        body = self.http(url, method="GET")
-        return parse_nominatim(json.loads(body), limit)
-
-
 def default_maps_providers(env: dict | None = None) -> list:
     env = dict(os.environ if env is None else env)
     providers: list = []
-    if env.get("MAPS_LIVE_ENABLED", "0") == "1":
-        if env.get("GOOGLE_PLACES_API_KEY"):
-            providers.append(GooglePlacesProvider(env["GOOGLE_PLACES_API_KEY"]))
-        # Keyless fallback: OpenStreetMap/Nominatim. Google is preferred when keyed;
-        # OSM requires attribution ("© OpenStreetMap contributors") and low volume.
-        providers.append(NominatimProvider())
+    if env.get("MAPS_LIVE_ENABLED", "0") == "1" and env.get("GOOGLE_PLACES_API_KEY"):
+        providers.append(GooglePlacesProvider(env["GOOGLE_PLACES_API_KEY"]))
     return providers
 
 
@@ -204,8 +132,7 @@ class MapsChannel:
         website_check: dict
         website_result = None
         if listing.website:
-            website_raw = listing.website if "://" in listing.website else "https://" + listing.website
-            url, problem = urls.normalize_result_url(website_raw)
+            url, problem = urls.normalize_result_url(listing.website)
             if url:
                 website_result = self.scorer.assess_url(url, text=listing.name)
                 website_check = {"status": "checked", **{k: website_result[k] for k in (

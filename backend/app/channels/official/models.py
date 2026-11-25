@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any
 
 # ----------------------------------------------------------------- vocabulary
@@ -16,7 +16,9 @@ ENTRY_STATUSES = (STATUS_PENDING, STATUS_APPROVED, STATUS_REVOKED)
 CLASS_A = "A"  # primary authorities: ministries, police, departments, regulators
 CLASS_B = "B"  # official government media: WAM, media offices
 CLASS_C = "C"  # independent media: supporting context only
-SOURCE_CLASSES = (CLASS_A, CLASS_B, CLASS_C)
+CLASS_P = "P"  # verified private / commercial organisation: legitimate site, NOT government
+SOURCE_CLASSES = (CLASS_A, CLASS_B, CLASS_C, CLASS_P)
+NON_GOVERNMENT_CLASSES = (CLASS_C, CLASS_P)
 
 SUBDOMAIN_EXACT = "exact"      # only the listed hosts
 SUBDOMAIN_LISTED = "listed"    # listed hosts + explicitly allowed subdomains
@@ -31,6 +33,11 @@ JURISDICTIONS = (
 # Domain-authentication statuses (separate from claim verification).
 AUTH_AUTHENTICATED = "AUTHENTICATED"          # approved + fresh Class A/B
 AUTH_INDEPENDENT_MEDIA = "INDEPENDENT_MEDIA"  # approved Class C: known outlet, NOT official
+AUTH_VERIFIED_ORGANIZATION = "VERIFIED_ORGANIZATION"  # approved Class P: verified company, NOT official
+AUTH_REPUTABLE_SITE = "REPUTABLE_SITE"      # NOT in the registry; widely used site (Tranco) — NOT official
+AUTH_ESTABLISHED_SITE = "ESTABLISHED_SITE"  # NOT in the registry; old domain + live HTTPS page + no warning signs
+LEGITIMATE_SITE_STATUSES = (AUTH_INDEPENDENT_MEDIA, AUTH_VERIFIED_ORGANIZATION, AUTH_REPUTABLE_SITE,
+                            AUTH_ESTABLISHED_SITE)
 AUTH_UNLISTED = "UNLISTED"
 AUTH_PENDING = "PENDING"
 AUTH_REVOKED = "REVOKED"
@@ -128,9 +135,13 @@ class RegistryEntry:
         age_days = (now - verified).total_seconds() / 86400
         return 0 <= age_days <= self.max_age_days
 
+    def expires_at(self) -> str | None:
+        verified = parse_ts(self.verified_at)
+        return iso(verified + timedelta(days=self.max_age_days)) if verified else None
+
     def is_trusted(self, now: datetime) -> bool:
         """Only approved AND fresh entries authenticate anything."""
-        return self.status == STATUS_APPROVED and bool(self.reviewer) and self.is_fresh(now)
+        return self.status == STATUS_APPROVED and self.is_fresh(now)
 
     def as_dict(self) -> dict:
         return {
@@ -171,21 +182,38 @@ class DomainAuthentication:
     source_class: str | None = None
     reason: str = ""
     registry_version: str = ""
+    reviewer: str | None = None
+    verified_at: str | None = None
+    expires_at: str | None = None
+    reputation: dict | None = None     # independent reputation evidence (REPUTABLE_SITE only)
+    established: dict | None = None    # established-website evidence / why not (ESTABLISHED_SITE)
 
     @property
     def authenticated(self) -> bool:
+        """Approved, fresh GOVERNMENT domain (Class A/B) — the government SAFE path."""
         return self.status == AUTH_AUTHENTICATED
+
+    @property
+    def legitimate_site(self) -> bool:
+        """Approved, fresh NON-government site (news / verified organisation) — the private SAFE path."""
+        return self.status in LEGITIMATE_SITE_STATUSES
 
     def as_dict(self) -> dict:
         return {
             "status": self.status,
             "authenticated": self.authenticated,
+            "legitimate_site": self.legitimate_site,
             "host": self.host,
             "entry_id": self.entry_id,
             "organization": self.organization,
             "source_class": self.source_class,
             "reason": self.reason,
             "registry_version": self.registry_version,
+            "reviewer": self.reviewer,
+            "verified_at": self.verified_at,
+            "expires_at": self.expires_at,
+            "reputation": self.reputation,
+            "established": self.established,
         }
 
 
@@ -195,7 +223,7 @@ class DomainAuthentication:
 @dataclass(frozen=True)
 class OfficialRecord:
     """One pre-fetched official document. Produced only by the retrieval layer
-    (or by a clearly labelled SYNTHETIC unit-test double)."""
+    (or by a clearly labelled SYNTHETIC test fixture)."""
 
     record_id: str
     entry_id: str
@@ -273,9 +301,11 @@ class EvidenceItem:
     content_hash: str
     detail: str = ""
     synthetic: bool = False
+    attributes: dict | None = None    # authority / jurisdiction / service / amount / effective_date outcome
 
     def as_dict(self) -> dict:
         return {
+            "attributes": self.attributes,
             "role": self.role,
             "comparison": self.comparison,
             "source_class": self.source_class,

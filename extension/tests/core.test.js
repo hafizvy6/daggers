@@ -34,6 +34,13 @@ test("sanitizeResultUrl drops query, fragment and credentials", () => {
 test("SAFE only when backend says SAFE AND domain is authenticated", () => {
   assert.equal(Core.labelFor({ tag: "SAFE", domain_auth: { authenticated: true } }).text, "SAFE");
   assert.equal(Core.labelFor({ tag: "SAFE", domain_auth: { authenticated: false } }).text, "UNVERIFIED");
+  // non-government SAFE path: approved news outlet / verified organisation
+  const site = Core.labelFor({ tag: "SAFE", domain_auth: { authenticated: false, legitimate_site: true } });
+  assert.equal(site.text, "SAFE");
+  assert.match(site.title, /not a government source/);
+  const popular = Core.labelFor({ tag: "SAFE", domain_auth: { authenticated: false, legitimate_site: true, status: "REPUTABLE_SITE" } });
+  assert.equal(popular.text, "SAFE");
+  assert.match(popular.title, /Widely used website/);
   assert.equal(Core.labelFor({ tag: "SAFE" }).text, "UNVERIFIED");
   assert.equal(Core.labelFor({ tag: "FAKE" }).text, "FAKE");
   assert.equal(Core.labelFor({ tag: "MISLEADING" }).text, "MISLEADING");
@@ -61,7 +68,7 @@ test("api base validation", () => {
 test("pickFields keeps no input echo", () => {
   const out = Core.pickFields({ input: "https://x.example/?t=1", tag: "WARNING", verdict: "UNKNOWN", domain_auth: { authenticated: false, status: "UNLISTED", host: "x" } });
   assert.equal(out.input, undefined);
-  assert.deepEqual(out.domain_auth, { authenticated: false, status: "UNLISTED" });
+  assert.deepEqual(out.domain_auth, { authenticated: false, legitimate_site: false, status: "UNLISTED" });
 });
 
 // ---- service worker with mocked chrome + fetch
@@ -118,4 +125,12 @@ test("manifest uses minimal permissions and no secrets", () => {
   const all = ["background.js", "lib/core.js", "content/tagger.js", "popup/popup.js"].map((f) => fs.readFileSync(path.join(__dirname, "..", f), "utf8")).join("\n");
   assert.ok(!/api[_-]?key|serper|GOOGLE_PLACES|X-Goog/i.test(all));
   assert.ok(!/innerHTML|eval\(|new Function/.test(all));
+});
+
+test("never green on failure, unknown tag or missing proof", () => {
+  for (const r of [null, undefined, { error: "network" }, { error: "http_503" }, { tag: "UNKNOWN" },
+                   { tag: "safe" }, { tag: "SAFE" }, { tag: "SAFE", domain_auth: null },
+                   { tag: "SAFE", domain_auth: { authenticated: "true" } }, { verdict: "UNKNOWN" }, "SAFE"]) {
+    assert.notEqual(Core.labelFor(r).cls, "daggers-tag--safe", JSON.stringify(r));
+  }
 });

@@ -42,9 +42,8 @@ class TestApplyToScanResult(unittest.TestCase):
         self.assertEqual(out["gov_verification"]["status"], "CONTRADICTED")
         self.assertEqual(out["tag"], "MISLEADING")
 
-    def test_numbers_never_safe(self):
-        self.assertEqual(self.apply("number", "+971 4 123 4567")["tag"], "WARNING")
-        self.assertEqual(self.apply("number", "+971900000042")["tag"], "FAKE")
+    def test_message_without_link_is_never_safe(self):
+        self.assertEqual(self.apply("text", "Hello, see you at the meeting tomorrow.")["tag"], "WARNING")
 
     def test_text_without_link(self):
         out = self.apply("text", "hello, see you tomorrow")

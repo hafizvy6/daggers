@@ -1,0 +1,40 @@
+# Legitimate sign-in (identity) and payment providers.
+#
+# A page whose form posts to one of these domains is NOT "sending data to an unrelated
+# destination" — that is how single sign-on and hosted checkout work. This list only prevents a
+# FALSE form-destination flag. It never makes a page SAFE, and a page that imitates a government
+# body while collecting credentials is still flagged for that.
+#
+# Match: the form's destination host equals one of these domains or is a sub-domain of it.
+identity:
+  - id.uaepass.ae            # UAE PASS (national digital identity)
+  - uaepass.ae
+  - accounts.google.com
+  - login.microsoftonline.com
+  - login.live.com
+  - appleid.apple.com
+  - facebook.com
+  - auth0.com
+  - okta.com
+  - b2clogin.com             # Azure AD B2C
+payment:
+  - paypal.com
+  - stripe.com
+  - checkout.com
+  - payfort.com              # Amazon Payment Services
+  - ngenius-payments.com     # Network International (N-Genius)
+  - network.ae
+  - telr.com
+  - ccavenue.ae
+  - ccavenue.com
+  - adyen.com
+  - worldpay.com
+  - cybersource.com
+  - mastercard.com
+  - visa.com
+  - apple.com                # Apple Pay
+  - pay.google.com
+  - tabby.ai
+  - tamara.co
+  - magnati.com
+  - payby.com

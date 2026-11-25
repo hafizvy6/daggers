@@ -5,12 +5,19 @@ import sys
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+try:  # Real FastAPI is required in production; the harness exists only for tests.
+    import fastapi  # noqa: F401
+    FASTAPI_HARNESS = False
+except ImportError:
+    sys.path.insert(0, str(Path(__file__).resolve().parent / "_compat"))
+    FASTAPI_HARNESS = True
+
+from fastapi.testclient import TestClient  # noqa: E402
 from backend.app.catalog import load_catalogs  # noqa: E402
 from backend.app.config import Settings  # noqa: E402
 from backend.app.main import create_app  # noqa: E402
@@ -92,3 +99,28 @@ def insert_test_finding(api_env):
         return finding
 
     return _insert
+
+
+TEST_PASSWORD = "correct-horse-battery-1"
+
+
+def login_as(client, app, role: str = "admin", username: str | None = None) -> str:
+    """Create (if needed) and sign in a portal user; sets the CSRF header on the client."""
+    from backend.app import security
+
+    username = username or f"test-{role}"
+    repo = app.state.runtime.repo
+    if not repo.get_user(username):
+        repo.create_user(username, security.hash_password(TEST_PASSWORD), role)
+    response = client.post("/api/auth/login", json={"username": username, "password": TEST_PASSWORD})
+    assert response.status_code == 200, response.text
+    csrf = response.json()["csrf_token"]
+    client.headers["X-CSRF-Token"] = csrf
+    return csrf
+
+
+@pytest.fixture
+def admin_env(api_env):
+    client, settings, app = api_env
+    login_as(client, app, "admin")
+    return client, settings, app

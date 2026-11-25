@@ -2,7 +2,7 @@
 
 Trust rules enforced here:
 
-* Only ``approved`` entries with a named reviewer whose ``verified_at`` is within
+* Only ``approved`` entries whose ``verified_at`` (approval date) is within
   ``max_age_days`` authenticate anything ("trusted").
 * Domains are matched exactly (punycode form) under an explicit subdomain
   policy. Nothing is trusted because it ends in ``.gov.ae`` — public suffixes
@@ -52,6 +52,8 @@ from .models import (
     iso,
     parse_ts,
     sha256_text,
+    CLASS_P,
+    AUTH_VERIFIED_ORGANIZATION,
 )
 
 OFFICIAL_DIR = Path(__file__).resolve().parent
@@ -69,9 +71,11 @@ _ID = re.compile(r"^[a-z0-9][a-z0-9_.-]{1,63}$")
 DEFAULT_PORTS = {"https": 443, "http": 80}
 
 HEADER = (
-    "# Daggers — official UAE source registry.\n"
-    "# Every entry starts as `pending`. Only a human reviewer can approve one:\n"
-    "#   python -m backend.app.channels.official.cli approve <id> --reviewer NAME\n"
+    "# Daggers — official UAE source registry + verified non-government sites.\n"
+    "# Classes: A authority · B official media · C independent media · P verified organisation\n"
+    "# (C and P are never official sources for government claims).\n"
+    "# Every entry starts as `pending`. Approve one with (reviewer name optional):\n"
+    "#   python -m backend.app.channels.official.cli approve <id>\n"
     "# Do not hand-edit `status`, `reviewer`, or `verified_at`.\n"
 )
 
@@ -244,7 +248,7 @@ def validate_entries(raw_entries: list[dict], *, allow_synthetic: bool = False) 
             if domain in PUBLIC_SUFFIXES or "." not in domain:
                 report.errors.append(f"{where}: '{domain}' is a public suffix, not an authority domain")
             if domain.endswith(".example") and not entry.synthetic:
-                report.errors.append(f"{where}: .example domains are reserved for synthetic unit-test doubles")
+                report.errors.append(f"{where}: .example domains are reserved for synthetic fixtures")
             if domain in domain_owner and domain_owner[domain] != entry.id:
                 report.errors.append(f"{where}: domain '{domain}' already claimed by {domain_owner[domain]}")
             domain_owner[domain] = entry.id
@@ -253,8 +257,6 @@ def validate_entries(raw_entries: list[dict], *, allow_synthetic: bool = False) 
         if entry.max_age_days <= 0 or entry.max_age_days > 730:
             report.errors.append(f"{where}: max_age_days must be within 1..730")
         if entry.status == STATUS_APPROVED:
-            if not entry.reviewer:
-                report.errors.append(f"{where}: approved entry needs a reviewer")
             if parse_ts(entry.verified_at) is None:
                 report.errors.append(f"{where}: approved entry needs a valid verified_at")
         if entry.status == STATUS_PENDING and (entry.reviewer or entry.verified_at):
@@ -263,6 +265,9 @@ def validate_entries(raw_entries: list[dict], *, allow_synthetic: bool = False) 
             report.warnings.append(f"{where}: revoked entry has no revoked_reason")
         if entry.source_class == CLASS_C and entry.authority_scope:
             report.errors.append(f"{where}: Class C (independent media) cannot hold authority_scope")
+        if entry.source_class == CLASS_P and (entry.authority_scope or entry.source_urls):
+            report.errors.append(f"{where}: Class P (verified organisation) cannot hold authority_scope or "
+                                 "official source_urls — it is never a government source")
         for source in entry.source_urls:
             try:
                 parts = urlsplit(source.url)
@@ -359,30 +364,31 @@ class Registry:
         # A trusted match wins; otherwise report the most informative non-trusted state.
         for entry in matches:
             if entry.is_trusted(now):
+                approval = dict(reviewer=entry.reviewer, verified_at=entry.verified_at, expires_at=entry.expires_at())
                 if entry.source_class == CLASS_C:
                     return DomainAuthentication(
-                        AUTH_INDEPENDENT_MEDIA,
-                        host,
-                        entry.id,
-                        entry.organization,
-                        entry.source_class,
-                        "approved independent media outlet — not an official government source",
-                        self.version,
+                        AUTH_INDEPENDENT_MEDIA, host, entry.id, entry.organization, entry.source_class,
+                        f"approved independent news outlet ({entry.organization}) — not an official government source",
+                        self.version, **approval,
+                    )
+                if entry.source_class == CLASS_P:
+                    return DomainAuthentication(
+                        AUTH_VERIFIED_ORGANIZATION, host, entry.id, entry.organization, entry.source_class,
+                        f"verified website of {entry.organization} — not a government source",
+                        self.version, **approval,
                     )
                 return DomainAuthentication(
-                    AUTH_AUTHENTICATED,
-                    host,
-                    entry.id,
-                    entry.organization,
-                    entry.source_class,
-                    f"approved official domain of {entry.organization} (reviewed by {entry.reviewer})",
-                    self.version,
+                    AUTH_AUTHENTICATED, host, entry.id, entry.organization, entry.source_class,
+                    f"approved official domain of {entry.organization}"
+                    + (f" (reviewed by {entry.reviewer})" if entry.reviewer else ""),
+                    self.version, **approval,
                 )
         entry = matches[0]
         if entry.status == STATUS_REVOKED:
             status, reason = AUTH_REVOKED, f"registry approval revoked ({entry.revoked_reason or 'no reason recorded'})"
         elif entry.status == STATUS_APPROVED:
-            status, reason = AUTH_EXPIRED, f"registry approval older than {entry.max_age_days} days; re-review required"
+            status, reason = AUTH_EXPIRED, (f"registry approval expired on {entry.expires_at()} "
+                                            f"(older than {entry.max_age_days} days); re-review required")
         else:
             status, reason = AUTH_PENDING, "registry entry is pending human review"
         return DomainAuthentication(
@@ -415,10 +421,10 @@ class Registry:
                 return data
         raise RegistryError(f"unknown entry id '{entry_id}'")
 
-    def approved_mapping(self, entry_id: str, reviewer: str, now: datetime) -> dict:
-        reviewer = (reviewer or "").strip()
-        if len(reviewer) < 2:
-            raise RegistryError("a named human reviewer is required to approve an entry")
+    def approved_mapping(self, entry_id: str, reviewer: str | None, now: datetime) -> dict:
+        """Approve an entry. The reviewer name is optional; the approval date is always recorded
+        (it drives the freshness expiry)."""
+        reviewer = (reviewer or "").strip() or None
         entry = self.by_id.get(entry_id)
         if entry is None:
             raise RegistryError(f"unknown entry id '{entry_id}'")
@@ -434,12 +440,13 @@ class Registry:
         return self._replace_raw(entry_id, update)
 
     def revoked_mapping(self, entry_id: str, reviewer: str, reason: str, now: datetime) -> dict:
-        if not (reviewer or "").strip() or not (reason or "").strip():
-            raise RegistryError("revocation needs a reviewer and a reason")
+        if not (reason or "").strip():
+            raise RegistryError("revocation needs a reason")
 
         def update(item: dict) -> None:
             item["status"] = STATUS_REVOKED
-            item["revoked_reason"] = f"{reason.strip()} — {reviewer.strip()} at {iso(now)}"
+            who = f" — {reviewer.strip()}" if (reviewer or "").strip() else ""
+            item["revoked_reason"] = f"{reason.strip()}{who} at {iso(now)}"
 
         return self._replace_raw(entry_id, update)
 

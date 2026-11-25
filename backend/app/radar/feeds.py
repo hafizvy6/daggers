@@ -8,6 +8,8 @@ from ..catalog import Catalog
 from ..config import Settings
 from ..core import scorer
 from .cursors import Cursors
+from ..intel import psl as psl_mod
+from ..intel.feeds import url_key
 
 
 class PhishFeeds:
@@ -30,16 +32,40 @@ class PhishFeeds:
         self.repo = repo
         self.cursors = cursors
         self._cache: set[str] = set()
+        self._url_rows: list[tuple[str, str]] = []
+        self._shared: tuple[frozenset[str], frozenset[str]] | None = None
+
+    def _shared_host(self, host: str) -> bool:
+        """Hosts where anyone can publish: a listed URL there says nothing about the whole domain."""
+        if self._shared is None:
+            from ..channels.reputation import SHARED_HOSTS, load_shared_hosts
+            self._shared = load_shared_hosts(SHARED_HOSTS)
+        hosts, domains = self._shared
+        return host in hosts or any(host == d or host.endswith("." + d) for d in domains)
 
     def _registrable(self, value: str) -> str | None:
+        """Feed entry → domain LABEL (host level). The exact URL is always kept separately
+        (feed_urls). Shared platforms get no domain-wide label; a tenant of a PSL private suffix
+        (shop.github.io) is labelled on its own, never the platform (github.io)."""
         candidate = value.strip().lower().replace("hxxp://", "http://").replace("hxxps://", "https://")
         if not candidate:
             return None
         if "://" not in candidate:
             candidate = f"https://{candidate}"
-        host = (urlparse(candidate).hostname or "").strip().rstrip(".")
+        try:
+            host = (urlparse(candidate).hostname or "").strip().rstrip(".")
+        except ValueError:
+            return None
         if not host:
             return None
+        keyed = url_key(value)
+        if keyed:
+            self._url_rows.append(keyed)
+        if self._shared_host(host):
+            return None
+        site = psl_mod.default().site(host)
+        if site:
+            return site
         normalized = scorer.normalize_url(host, self.catalog.suffix_resolver)
         return normalized.registrable_domain or normalized.unicode_host or None
 
@@ -88,6 +114,9 @@ class PhishFeeds:
                     domain = self._registrable(line)
                     if domain:
                         domains.add(domain)
+        if self._url_rows:
+            self.repo.upsert_feed_urls(self._url_rows, source="feeds")
+            self._url_rows = []
         if domains:
             self._cache = domains
             self.repo.upsert_feed_labels(domains, source="feeds")

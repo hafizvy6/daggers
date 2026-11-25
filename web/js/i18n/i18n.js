@@ -1,6 +1,6 @@
 /* ============================================================
    Daggers · i18n runtime — catalogs, t(), setLang(), dir/lang
-   Rules: every visible string is t("ns.key"); a missing key
+   Rules (WS3 §6): every visible string is t("ns.key"); missing key
    → key in dev, English in prod; Intl with the active locale;
    Western numerals site-wide.
    ============================================================ */
@@ -63,6 +63,9 @@ function lookup(cat, key) {
   return typeof node === "string" ? node : undefined;
 }
 
+/** True when the key exists in the active (or fallback) catalog. */
+export const hasKey = (key) => (lookup(catalog[current], key) ?? lookup(fallback, key)) !== undefined;
+
 /** t("feed.title") or t("feed.count", { n: 3 }) — {var} interpolation. */
 export function t(key, vars) {
   let s = lookup(catalog[current], key) ?? lookup(fallback, key);
@@ -76,7 +79,7 @@ export function t(key, vars) {
 
 /**
  * Pick the active-language variant of data-provided text.
- * Contract: the API may ship `reasons_ar`, `verdict_note_ar`, `label_ar` — the
+ * Contract: WS1 may ship `reasons_ar`, `verdict_note_ar`, `label_ar` — the
  * backend/catalog supplies them; we never machine-translate in the UI.
  */
 export function localized(obj, field) {

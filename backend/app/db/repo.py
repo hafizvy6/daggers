@@ -45,11 +45,6 @@ def _json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
-def _json_with_default(value: Any) -> str:
-    """JSON for additive sweep fields; unusual objects degrade to strings."""
-    return json.dumps(value, ensure_ascii=False, separators=(",", ":"), default=str)
-
-
 def canonical_finding(value: Mapping[str, Any]) -> dict:
     reasons = value.get("reasons") or []
     if isinstance(reasons, str):
@@ -75,6 +70,33 @@ def canonical_finding(value: Mapping[str, Any]) -> dict:
     }
 
 
+# Additive finding fields produced by the WS2 trust policy and investigations.
+FINDING_DETAIL_KEYS = (
+    "tag", "manual_review", "domain_auth", "gov_verification", "trust_reasons",
+    "scam_type", "signals", "submitted_url", "investigator", "policy_version",
+    "registrable_domain", "created_at",
+    # live Checker
+    "input_type", "submitted_input", "normalized_url", "analyzed_url", "urls", "scanned_at",
+    "scan_status", "checks", "precautions", "redactions", "homograph", "normalized", "risk_score",
+    "engine_version", "maliciousness", "verdict_history", "reputation_version",
+    "reason_codes", "final_domain_auth", "evidence", "live_evidence",
+)
+
+
+def finding_with_detail(value: Mapping[str, Any], detail: Mapping[str, Any] | str | None) -> dict:
+    """C1 finding + integration detail (tag, authentication, verification evidence)."""
+    base = canonical_finding(value)
+    if isinstance(detail, str):
+        try:
+            detail = json.loads(detail or "{}")
+        except json.JSONDecodeError:
+            detail = {}
+    for key in FINDING_DETAIL_KEYS:
+        if detail and key in detail:
+            base[key] = detail[key]
+    return base
+
+
 def canonical_report(value: Mapping[str, Any]) -> dict:
     evidence = value.get("evidence") or {}
     if isinstance(evidence, str):
@@ -90,8 +112,26 @@ def canonical_report(value: Mapping[str, Any]) -> dict:
     }
 
 
+def report_with_ai(row: Mapping[str, Any]) -> dict:
+    report = canonical_report(row)
+    evidence = row.get("evidence")
+    if isinstance(evidence, str):
+        try:
+            evidence = json.loads(evidence)
+        except json.JSONDecodeError:
+            evidence = {}
+    if isinstance(evidence, Mapping):
+        for key in ("tag", "evidence_id", "verification_status"):
+            if key in evidence:
+                report["evidence"][key] = evidence[key]
+    report["domain"] = report["evidence"]["domain"]
+    ai = row.get("ai") if hasattr(row, "get") else None
+    report["ai"] = json.loads(ai) if isinstance(ai, str) and ai else None
+    return report
+
+
 class Repository:
-    """All SQL and all SQLite orchestration lives here. No seed data is inserted."""
+    """All SQL lives here. Live data only: there is no seed, fixture or demo data."""
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -114,22 +154,29 @@ class Repository:
                 self._conn.execute("PRAGMA journal_mode=WAL")
                 self._conn.execute("PRAGMA foreign_keys=ON")
                 self._conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
-                # Additive migration for databases created before the sweep columns landed.
-                columns = {
-                    str(row["name"])
-                    for row in self._conn.execute("PRAGMA table_info(sweep_results)").fetchall()
-                }
-                if "detail" not in columns:
-                    self._conn.execute("ALTER TABLE sweep_results ADD COLUMN detail TEXT")
-                self._conn.executescript("""
-                CREATE TABLE IF NOT EXISTS analyst_labels (
-                    domain          TEXT PRIMARY KEY,
-                    label           TEXT NOT NULL CHECK(label IN ('official', 'scam', 'unrelated', 'parked')),
-                    updated_at      TEXT NOT NULL
-                );
-                """)
+                self._migrate()
                 self._conn.commit()
         return missing
+
+    MIGRATIONS = (
+        ("sweep_results", "detail", "ALTER TABLE sweep_results ADD COLUMN detail TEXT NOT NULL DEFAULT '{}'"),
+        ("findings", "detail", "ALTER TABLE findings ADD COLUMN detail TEXT NOT NULL DEFAULT '{}'"),
+        ("reports", "ai", "ALTER TABLE reports ADD COLUMN ai TEXT"),
+        ("sweep_runs", "query_id", "ALTER TABLE sweep_runs ADD COLUMN query_id TEXT"),
+        ("sweep_runs", "state", "ALTER TABLE sweep_runs ADD COLUMN state TEXT NOT NULL DEFAULT '{}'"),
+    )
+
+    def _migrate(self) -> None:
+        """Additive, idempotent column migrations (never drops or rewrites data)."""
+        assert self._conn is not None
+        for table, column, statement in self.MIGRATIONS:
+            columns = {row[1] for row in self._conn.execute(f"PRAGMA table_info({table})")}
+            if column not in columns:
+                self._conn.execute(statement)
+        self._conn.execute(
+            "INSERT INTO meta(key, value) VALUES('schema_version', '3') "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+        )
 
     def close(self) -> None:
         with self._lock:
@@ -229,53 +276,10 @@ class Repository:
             row = self.conn.execute("SELECT * FROM domains WHERE domain = ?", (domain.lower(),)).fetchone()
         return dict(row) if row else None
 
-    ANALYST_LABELS = {"official", "scam", "unrelated", "parked"}
-    SUPPRESSED_LABELS = {"official", "unrelated", "parked"}
-
-    def set_analyst_label(self, domain: str, label: str) -> dict:
-        clean = self._clean_domain(domain)
-        normalized = str(label or "").strip().lower()
-        if normalized not in self.ANALYST_LABELS:
-            raise ValueError(f"invalid analyst label: {label}")
-        now = utc_now()
-        with self._lock, self.conn:
-            self.conn.execute(
-                "INSERT INTO analyst_labels(domain, label, updated_at) VALUES(?, ?, ?) "
-                "ON CONFLICT(domain) DO UPDATE SET label = excluded.label, updated_at = excluded.updated_at",
-                (clean, normalized, now),
-            )
-        return {"domain": clean, "label": normalized, "updated_at": now}
-
-    def get_analyst_label(self, domain: str) -> dict | None:
-        clean = self._clean_domain(domain)
-        with self._lock:
-            row = self.conn.execute(
-                "SELECT domain, label, updated_at FROM analyst_labels WHERE domain = ?",
-                (clean,),
-            ).fetchone()
-        return dict(row) if row else None
-
-    def analyst_label_stats(self) -> dict[str, int]:
-        with self._lock:
-            rows = self.conn.execute(
-                "SELECT label, COUNT(*) AS n FROM analyst_labels GROUP BY label"
-            ).fetchall()
-        counts = {str(row["label"]): int(row["n"]) for row in rows}
-        return {label: counts.get(label, 0) for label in sorted(self.ANALYST_LABELS)}
-
-    def _clean_domain(self, domain: str) -> str:
-        clean = str(domain or "").strip().lower().rstrip(".")
-        if not clean or "/" in clean or "://" in clean or " ".join(clean.split()) != clean:
-            raise ValueError("invalid domain")
-        return clean
-
     def unprocessed_domains(self, limit: int = 20) -> list[dict]:
         with self._lock:
             rows = self.conn.execute(
-                "SELECT d.* FROM domains d "
-                "LEFT JOIN analyst_labels al ON al.domain = d.domain "
-                "WHERE d.enqueued = 0 AND COALESCE(al.label, '') NOT IN ('official', 'unrelated', 'parked') "
-                "ORDER BY d.first_seen ASC LIMIT ?",
+                "SELECT * FROM domains WHERE enqueued = 0 ORDER BY first_seen ASC LIMIT ?",
                 (int(limit),),
             ).fetchall()
         return [dict(row) for row in rows]
@@ -287,7 +291,11 @@ class Repository:
     # ---------------------------------------------------------------- findings
 
     def _row_to_finding(self, row: sqlite3.Row) -> dict:
-        return canonical_finding(
+        keys = row.keys()
+        detail = dict(json.loads(row["detail"] or "{}")) if "detail" in keys else {}
+        if "created_at" in keys and row["created_at"]:
+            detail.setdefault("created_at", row["created_at"])
+        return finding_with_detail(
             {
                 "id": row["id"],
                 "domain": row["domain"],
@@ -301,103 +309,44 @@ class Repository:
                 "evidence_url": row["evidence_url"],
                 "gallery_match": row["gallery_match"],
                 "is_case_file": row["is_case_file"],
-            }
+            },
+            detail,
         )
 
-    def get_finding(self, finding_id: int) -> dict | None:
+    def get_finding(self, finding_id: int, mode: str = "live") -> dict | None:
         with self._lock:
             row = self.conn.execute(
                 "SELECT f.id, d.domain, f.verdict, f.score, f.reasons, "
-                "COALESCE(d.tls_issued, f.created_at) AS cert_issued, d.first_seen, d.source, "
+                "COALESCE(d.tls_issued, f.created_at) AS cert_issued, d.first_seen, "
+                "COALESCE(json_extract(f.detail, '$.source'), d.source) AS source, "
                 "COALESCE(f.clone_score, 0) AS clone, f.evidence_path AS evidence_url, "
-                "f.gallery_match, f.is_case_file "
+                "f.gallery_match, f.is_case_file, f.detail, f.created_at "
                 "FROM findings f JOIN domains d ON d.id = f.domain_id WHERE f.id = ?",
                 (int(finding_id),),
             ).fetchone()
         return self._row_to_finding(row) if row else None
 
-    def list_findings_for_reconciliation(self, limit: int = 1000) -> list[dict]:
-        with self._lock:
-            rows = self.conn.execute(
-                "SELECT f.id, d.domain, f.verdict, f.score, f.reasons, f.l1_detail, "
-                "COALESCE(d.tls_issued, f.created_at) AS cert_issued, d.first_seen, d.source, "
-                "COALESCE(f.clone_score, 0) AS clone, f.evidence_path, f.gallery_match, f.created_at "
-                "FROM findings f JOIN domains d ON d.id = f.domain_id "
-                "ORDER BY f.id ASC LIMIT ?",
-                (max(1, min(int(limit), 5000)),),
-            ).fetchall()
-        results: list[dict] = []
-        for row in rows:
-            reasons = row["reasons"]
-            l1_detail = row["l1_detail"]
-            try:
-                reasons = json.loads(reasons) if isinstance(reasons, str) else reasons
-            except json.JSONDecodeError:
-                reasons = [str(reasons)]
-            try:
-                l1_detail = json.loads(l1_detail) if isinstance(l1_detail, str) else l1_detail
-            except json.JSONDecodeError:
-                l1_detail = {}
-            results.append({
-                "id": int(row["id"]),
-                "domain": str(row["domain"]),
-                "verdict": str(row["verdict"]),
-                "score": float(row["score"]),
-                "reasons": reasons or [],
-                "l1_detail": l1_detail or {},
-                "cert_issued": row["cert_issued"],
-                "first_seen": row["first_seen"],
-                "source": row["source"],
-                "clone": float(row["clone"] or 0),
-                "evidence_url": row["evidence_path"],
-                "gallery_match": row["gallery_match"],
-                "created_at": row["created_at"],
-            })
-        return results
+    # Portal-only findings: officer investigations and public Checker submissions (which may
+    # contain a member of the public's message). Never in the public feed, stream or Guard.
+    RESTRICTED_SOURCES = ("investigation", "checker")
 
-    def clear_evidence(self, finding_id: int) -> None:
-        with self._lock, self.conn:
-            self.conn.execute(
-                "UPDATE findings SET evidence_path = NULL, rendered = 0 WHERE id = ?",
-                (int(finding_id),),
-            )
-
-    def report_exists(self, finding_id: int) -> bool:
-        with self._lock:
-            row = self.conn.execute(
-                "SELECT 1 FROM reports WHERE finding_id = ? LIMIT 1",
-                (int(finding_id),),
-            ).fetchone()
-        return row is not None
-
-    def get_findings(
-        self,
-        limit: int = 50,
-        *,
-        min_score: float | None = None,
-        include_unknown: bool = False,
-        include_suppressed: bool = False,
-    ) -> list[dict]:
+    def get_findings(self, limit: int = 50, mode: str = "live", include_restricted: bool = False) -> list[dict]:
+        """Newest findings. Restricted (portal investigation) findings are excluded unless asked."""
         limit = max(1, min(int(limit), 200))
-        clauses: list[str] = []
-        params: list[object] = []
-        if not include_unknown:
-            clauses.append("f.verdict != 'UNKNOWN' AND f.score >= ?")
-            params.append(float(min_score if min_score is not None else 0.35))
-        if not include_suppressed:
-            clauses.append("COALESCE(al.label, '') NOT IN ('official', 'unrelated', 'parked')")
-        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+        where = "" if include_restricted else (
+            "WHERE COALESCE(json_extract(f.detail, '$.source'), d.source, '') NOT IN ('investigation', 'checker') "
+        )
         with self._lock:
             rows = self.conn.execute(
                 "SELECT f.id, d.domain, f.verdict, f.score, f.reasons, "
-                "COALESCE(d.tls_issued, f.created_at) AS cert_issued, d.first_seen, d.source, "
+                "COALESCE(d.tls_issued, f.created_at) AS cert_issued, d.first_seen, "
+                "COALESCE(json_extract(f.detail, '$.source'), d.source) AS source, "
                 "COALESCE(f.clone_score, 0) AS clone, f.evidence_path AS evidence_url, "
-                "f.gallery_match, f.is_case_file "
+                "f.gallery_match, f.is_case_file, f.detail, f.created_at "
                 "FROM findings f JOIN domains d ON d.id = f.domain_id "
-                "LEFT JOIN analyst_labels al ON al.domain = d.domain "
-                f"{where} "
+                + where +
                 "ORDER BY f.created_at DESC, f.id DESC LIMIT ?",
-                (*params, limit),
+                (limit,),
             ).fetchall()
         return [self._row_to_finding(row) for row in rows]
 
@@ -420,6 +369,7 @@ class Repository:
         is_case_file: bool = False,
         finding_id: int | None = None,
         enqueued: bool | None = None,
+        detail: Mapping[str, Any] | None = None,
     ) -> dict:
         domain_id = self.upsert_domain(
             domain,
@@ -440,14 +390,15 @@ class Repository:
             float(clone_score) if clone_score is not None else None,
             created_at or utc_now(),
             1 if is_case_file else 0,
+            _json(dict(detail or {})),
         )
         with self._lock, self.conn:
             if finding_id is None:
                 cursor = self.conn.execute(
                     "INSERT INTO findings("
                     "domain_id, score, verdict, reasons, l1_detail, rendered, evidence_path, "
-                    "gallery_match, clone_score, created_at, is_case_file"
-                    ") VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "gallery_match, clone_score, created_at, is_case_file, detail"
+                    ") VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     values,
                 )
                 new_id = int(cursor.lastrowid)
@@ -455,12 +406,12 @@ class Repository:
                 self.conn.execute(
                     "INSERT OR IGNORE INTO findings("
                     "id, domain_id, score, verdict, reasons, l1_detail, rendered, evidence_path, "
-                    "gallery_match, clone_score, created_at, is_case_file"
-                    ") VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "gallery_match, clone_score, created_at, is_case_file, detail"
+                    ") VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (int(finding_id), *values),
                 )
                 new_id = int(finding_id)
-        return self.get_finding(new_id) or canonical_finding({"id": new_id, "domain": domain})
+        return self.get_finding(new_id, "live") or canonical_finding({"id": new_id, "domain": domain})
 
     def set_finding_evidence(self, finding_id: int, evidence_url: str) -> dict | None:
         with self._lock, self.conn:
@@ -468,7 +419,7 @@ class Repository:
                 "UPDATE findings SET evidence_path = ?, rendered = 1 WHERE id = ?",
                 (evidence_url, int(finding_id)),
             )
-        return self.get_finding(finding_id)
+        return self.get_finding(finding_id, "live")
 
     def update_finding_analysis(
         self,
@@ -501,23 +452,27 @@ class Repository:
                     int(finding_id),
                 ),
             )
-        return self.get_finding(finding_id)
+        return self.get_finding(finding_id, "live")
 
-    def evidence_path(self, finding_id: int) -> Path | None:
-        finding = self.get_finding(int(finding_id))
+    def evidence_path(self, finding_id: int, mode: str = "live") -> Path | None:
+        finding = self.get_finding(int(finding_id), mode)
         if not finding or not finding["evidence_url"]:
             return None
         url = str(finding["evidence_url"])
         return self.evidence_dir / Path(url).name
 
-    def ensure_evidence_file(self, finding_id: int) -> Path | None:
-        """Return an existing real evidence file, or None. Never invent one."""
-        destination = self.evidence_path(int(finding_id))
+    def ensure_evidence_file(self, finding_id: int, mode: str = "live") -> Path | None:
+        finding = self.get_finding(int(finding_id), mode)
+        if finding is None:
+            return None
+        destination = self.evidence_path(int(finding_id), mode)
         if destination is None:
             return None
-        return destination if destination.exists() and destination.stat().st_size > 0 else None
+        if destination.exists() and destination.stat().st_size > 0:
+            return destination
+        return None  # real evidence only: a missing render is a 404, never a generated stand-in
 
-    def find_evidence_url(self, domain: str) -> str | None:
+    def find_evidence_url(self, domain: str, mode: str = "live") -> str | None:
         def same(left: str, right: str) -> bool:
             left_forms = homograph.host_forms(left)
             right_forms = homograph.host_forms(right)
@@ -537,8 +492,9 @@ class Repository:
 
     # ------------------------------------------------------------------ guard
 
-    def get_guard_rows(self, guard_block_misleading: bool = False) -> list[dict]:
+    def get_guard_rows(self, mode: str = "live", guard_block_misleading: bool = False) -> list[dict]:
         verdicts = ["MALICIOUS", "MISLEADING"] if guard_block_misleading else ["MALICIOUS"]
+        timestamps: dict[int, str] = {}
         placeholders = ",".join("?" for _ in verdicts)
         with self._lock:
             rows = self.conn.execute(
@@ -547,9 +503,11 @@ class Repository:
                 f"COALESCE(f.clone_score, 0) AS clone, f.evidence_path AS evidence_url, "
                 f"f.gallery_match, f.is_case_file, f.created_at "
                 f"FROM findings f JOIN domains d ON d.id = f.domain_id "
-                f"WHERE f.verdict IN ({placeholders}) AND f.id = ("
+                f"WHERE f.verdict IN ({placeholders}) "
+                f"AND COALESCE(json_extract(f.detail, '$.source'), '') != 'checker' AND f.id = ("
                 f"SELECT MAX(f2.id) FROM findings f2 WHERE f2.domain_id = f.domain_id "
-                f"AND f2.verdict IN ({placeholders})) "
+                f"AND f2.verdict IN ({placeholders}) "
+                f"AND COALESCE(json_extract(f2.detail, '$.source'), '') != 'checker') "
                 f"ORDER BY f.created_at DESC, f.id DESC",
                 (*verdicts, *verdicts),
             ).fetchall()
@@ -573,8 +531,8 @@ class Repository:
             )
         return guard_rows
 
-    def guard_stats(self, guard_block_misleading: bool = False) -> dict:
-        rows = self.get_guard_rows(guard_block_misleading)
+    def guard_stats(self, mode: str = "live", guard_block_misleading: bool = False) -> dict:
+        rows = self.get_guard_rows(mode, guard_block_misleading)
         with self._lock:
             hit_row = self.conn.execute("SELECT COALESCE(SUM(count), 0) AS total FROM guard_hits").fetchone()
         total_hits = int(hit_row["total"]) if hit_row else 0
@@ -586,6 +544,119 @@ class Repository:
             "feed_size": len(rows),
             "mode": "live",
         }
+
+    # ---------------------------------------------------------------- Guard (live block list)
+
+    def guard_candidates(self, verdicts: Iterable[str], limit: int = 5000) -> list[dict]:
+        """The LATEST finding of every domain whose latest engine verdict is in `verdicts` (any source)."""
+        verdicts = list(verdicts)
+        placeholders = ",".join("?" for _ in verdicts)
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT f.id, d.domain, f.verdict, f.score, f.reasons, "
+                "COALESCE(d.tls_issued, f.created_at) AS cert_issued, d.first_seen, "
+                "COALESCE(json_extract(f.detail, '$.source'), d.source) AS source, "
+                "COALESCE(f.clone_score, 0) AS clone, f.evidence_path AS evidence_url, "
+                "f.gallery_match, f.is_case_file, f.detail, f.created_at "
+                "FROM findings f JOIN domains d ON d.id = f.domain_id "
+                f"WHERE f.verdict IN ({placeholders}) AND f.id = "
+                "(SELECT MAX(f2.id) FROM findings f2 WHERE f2.domain_id = f.domain_id) "
+                "ORDER BY f.id DESC LIMIT ?", (*verdicts, int(limit))).fetchall()
+        return [self._row_to_finding(r) for r in rows]
+
+    def guard_list_rows(self, active_only: bool = True) -> list[dict]:
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT domain, active, source, finding_id, tag, verdict, score, reason, listed_at, updated_at, "
+                "delisted_reason FROM guard_blocklist" + (" WHERE active = 1" if active_only else "")
+                + " ORDER BY listed_at DESC, domain").fetchall()
+        return [dict(r) for r in rows]
+
+    def guard_get(self, domain: str) -> dict | None:
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT domain, active, source, finding_id, tag, verdict, score, reason, listed_at, updated_at, "
+                "delisted_reason FROM guard_blocklist WHERE domain = ?", (domain,)).fetchone()
+        return dict(row) if row else None
+
+    def guard_upsert(self, entry: Mapping[str, Any]) -> bool:
+        """Insert or refresh a listed domain. → True when it was not active before (newly listed)."""
+        now = utc_now()
+        with self._lock, self.conn:
+            row = self.conn.execute("SELECT active, listed_at FROM guard_blocklist WHERE domain = ?",
+                                    (entry["domain"],)).fetchone()
+            new = row is None or not row["active"]
+            listed_at = now if new else row["listed_at"]
+            self.conn.execute(
+                "INSERT INTO guard_blocklist(domain, active, source, finding_id, tag, verdict, score, reason, "
+                "listed_at, updated_at, delisted_reason) VALUES(?, 1, ?, ?, ?, ?, ?, ?, ?, ?, NULL) "
+                "ON CONFLICT(domain) DO UPDATE SET active = 1, source = excluded.source, "
+                "finding_id = excluded.finding_id, tag = excluded.tag, verdict = excluded.verdict, "
+                "score = excluded.score, reason = excluded.reason, listed_at = excluded.listed_at, "
+                "updated_at = excluded.updated_at, delisted_reason = NULL",
+                (entry["domain"], entry["source"], entry.get("finding_id"), entry["tag"], entry["verdict"],
+                 float(entry.get("score") or 0.0), str(entry.get("reason") or "")[:300], listed_at, now))
+            if new:
+                self.conn.execute("INSERT INTO guard_events(kind, domain, source, at) VALUES('listed', ?, ?, ?)",
+                                  (entry["domain"], entry["source"], now))
+        return new
+
+    def guard_delist(self, domain: str, reason: str) -> bool:
+        now = utc_now()
+        with self._lock, self.conn:
+            cur = self.conn.execute(
+                "UPDATE guard_blocklist SET active = 0, delisted_reason = ?, updated_at = ? "
+                "WHERE domain = ? AND active = 1", (reason[:200], now, domain))
+            if cur.rowcount:
+                self.conn.execute("INSERT INTO guard_events(kind, domain, detail, at) VALUES('delisted', ?, ?, ?)",
+                                  (domain, _json({"reason": reason[:200]}), now))
+        return bool(cur.rowcount)
+
+    def guard_record_block(self, domain: str, day: str) -> tuple[int, int]:
+        """A real block (DoH answer / verdict-page hit). No client data is stored. → (today, total)."""
+        now = utc_now()
+        with self._lock, self.conn:
+            self.conn.execute("INSERT INTO guard_daily(day, hits) VALUES(?, 1) "
+                              "ON CONFLICT(day) DO UPDATE SET hits = hits + 1", (day,))
+            self.conn.execute(
+                "INSERT INTO guard_hits(domain, count, updated_at) VALUES(?, 1, ?) "
+                "ON CONFLICT(domain) DO UPDATE SET count = count + 1, updated_at = excluded.updated_at",
+                (domain.lower(), now))
+            today = self.conn.execute("SELECT hits FROM guard_daily WHERE day = ?", (day,)).fetchone()["hits"]
+            total = self.conn.execute("SELECT COALESCE(SUM(hits), 0) AS n FROM guard_daily").fetchone()["n"]
+        return int(today), int(total)
+
+    def guard_block_counts(self, day: str) -> tuple[int, int]:
+        with self._lock:
+            row = self.conn.execute("SELECT hits FROM guard_daily WHERE day = ?", (day,)).fetchone()
+            total = self.conn.execute("SELECT COALESCE(SUM(hits), 0) AS n FROM guard_daily").fetchone()["n"]
+        return (int(row["hits"]) if row else 0), int(total)
+
+    def guard_log_event(self, kind: str, detail: Mapping[str, Any]) -> None:
+        with self._lock, self.conn:
+            self.conn.execute("INSERT INTO guard_events(kind, detail, at) VALUES(?, ?, ?)",
+                              (kind, _json(dict(detail)), utc_now()))
+            self.conn.execute("DELETE FROM guard_events WHERE id NOT IN "
+                              "(SELECT id FROM guard_events ORDER BY id DESC LIMIT 2000)")
+
+    def guard_last_event(self, kind: str) -> dict | None:
+        with self._lock:
+            row = self.conn.execute("SELECT detail, at FROM guard_events WHERE kind = ? ORDER BY id DESC LIMIT 1",
+                                    (kind,)).fetchone()
+        return {"at": row["at"], **json.loads(row["detail"] or "{}")} if row else None
+
+    def guard_pushed(self, provider: str) -> set[str]:
+        with self._lock:
+            rows = self.conn.execute("SELECT domain FROM guard_pushed WHERE provider = ?", (provider,)).fetchall()
+        return {r["domain"] for r in rows}
+
+    def guard_mark_pushed(self, provider: str, added: Iterable[str], removed: Iterable[str]) -> None:
+        now = utc_now()
+        with self._lock, self.conn:
+            self.conn.executemany("INSERT OR REPLACE INTO guard_pushed(provider, domain, pushed_at) VALUES(?, ?, ?)",
+                                  [(provider, d, now) for d in added])
+            self.conn.executemany("DELETE FROM guard_pushed WHERE provider = ? AND domain = ?",
+                                  [(provider, d) for d in removed])
 
     def record_guard_hit(self, domain: str) -> int:
         clean = str(domain).lower()
@@ -602,7 +673,7 @@ class Repository:
     # ---------------------------------------------------------------- reports
 
     def _row_to_report(self, row: sqlite3.Row) -> dict:
-        return canonical_report(dict(row))
+        return report_with_ai(dict(row))
 
     def insert_report(
         self,
@@ -618,6 +689,10 @@ class Repository:
         from ..reports.builder import validate_zero_pii
 
         clean_evidence = canonical_finding(evidence)
+        # Zero-PII additive fields only: the final tag and a pointer to verification evidence.
+        for key in ("tag", "evidence_id", "verification_status"):
+            if evidence.get(key) is not None:
+                clean_evidence[key] = str(evidence[key])
         validate_zero_pii(clean_evidence)
         values = (
             int(finding_id),
@@ -665,6 +740,17 @@ class Repository:
                 ).fetchall()
         return [self._row_to_report(row) for row in rows]
 
+    def save_report_ai(self, report_id: int, payload: Mapping[str, Any]) -> None:
+        keep = {k: payload.get(k) for k in ("summary_en", "summary_ar", "provider", "fallback", "grounding")}
+        keep["written_at"] = utc_now()
+        with self._lock, self.conn:
+            self.conn.execute("UPDATE reports SET ai = ? WHERE id = ?", (_json(keep), int(report_id)))
+
+    def report_for_finding(self, finding_id: int) -> dict | None:
+        with self._lock:
+            row = self.conn.execute("SELECT * FROM reports WHERE finding_id = ?", (int(finding_id),)).fetchone()
+        return self._row_to_report(row) if row else None
+
     def set_report_status(self, report_id: int, status: str, filed_at: str | None = None) -> dict | None:
         with self._lock, self.conn:
             self.conn.execute(
@@ -672,123 +758,6 @@ class Repository:
                 (status, filed_at, int(report_id)),
             )
         return self.get_report(int(report_id))
-
-    # ---------------------------------------------------------------- sweeps
-
-    def create_sweep_run(
-        self,
-        *,
-        query: str,
-        lang: str,
-        channel: str,
-        engine: str,
-        cached: bool,
-    ) -> dict:
-        created_at = utc_now()
-        with self._lock, self.conn:
-            cursor = self.conn.execute(
-                "INSERT INTO sweep_runs(query, lang, channel, engine, cached, created_at) "
-                "VALUES(?, ?, ?, ?, ?, ?)",
-                (str(query), str(lang), str(channel), str(engine), 1 if cached else 0, created_at),
-            )
-            run_id = int(cursor.lastrowid)
-        return {
-            "id": run_id,
-            "query": str(query),
-            "lang": str(lang),
-            "channel": str(channel),
-            "engine": str(engine),
-            "cached": bool(cached),
-            "created_at": created_at,
-            "query_id": None,
-        }
-
-    def add_sweep_results(self, run_id: int, results: Iterable[Mapping[str, Any]]) -> None:
-        base_keys = {
-            "position", "url", "title", "snippet", "verdict", "score",
-            "reasons", "finding_id",
-        }
-        rows: list[tuple[Any, ...]] = []
-        for index, result in enumerate(results, 1):
-            item = dict(result)
-            reasons = item.get("reasons") or []
-            if isinstance(reasons, str):
-                reasons = [reasons]
-            detail = {key: value for key, value in item.items() if key not in base_keys}
-            rows.append(
-                (
-                    int(run_id),
-                    int(item.get("position") or index),
-                    str(item.get("url") or ""),
-                    item.get("title"),
-                    item.get("snippet"),
-                    item.get("verdict"),
-                    float(item.get("score") or 0.0),
-                    _json_with_default(list(reasons)),
-                    item.get("finding_id"),
-                    _json_with_default(detail),
-                )
-            )
-        if not rows:
-            return
-        with self._lock, self.conn:
-            self.conn.executemany(
-                "INSERT INTO sweep_results(run_id, position, url, title, snippet, verdict, "
-                "score, reasons, finding_id, detail) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                rows,
-            )
-
-    def get_sweep_run(self, run_id: int) -> dict | None:
-        def loads(raw: Any, default: Any) -> Any:
-            if raw is None or raw == "":
-                return default
-            try:
-                return json.loads(raw)
-            except (TypeError, json.JSONDecodeError):
-                return default
-
-        with self._lock:
-            row = self.conn.execute(
-                "SELECT * FROM sweep_runs WHERE id = ?", (int(run_id),)
-            ).fetchone()
-            if row is None:
-                return None
-            stored = self.conn.execute(
-                "SELECT * FROM sweep_results WHERE run_id = ? ORDER BY position, id",
-                (int(run_id),),
-            ).fetchall()
-
-        results: list[dict] = []
-        for stored_row in stored:
-            detail = loads(stored_row["detail"], {})
-            if not isinstance(detail, dict):
-                detail = {}
-            reasons = loads(stored_row["reasons"], [])
-            if not isinstance(reasons, list):
-                reasons = [str(reasons)]
-            result = {
-                "position": int(stored_row["position"]),
-                "url": str(stored_row["url"] or ""),
-                "title": stored_row["title"],
-                "snippet": stored_row["snippet"],
-                "verdict": stored_row["verdict"],
-                "score": float(stored_row["score"] or 0.0),
-                "reasons": reasons,
-                "finding_id": stored_row["finding_id"],
-            }
-            result.update(detail)
-            results.append(result)
-        return {
-            "id": int(row["id"]),
-            "query": str(row["query"]),
-            "lang": str(row["lang"]),
-            "channel": str(row["channel"]),
-            "engine": str(row["engine"]),
-            "cached": bool(row["cached"]),
-            "created_at": str(row["created_at"]),
-            "query_id": None,
-            "results": results,
-        }
 
     # -------------------------------------------------------------- feed labels
 
@@ -802,14 +771,385 @@ class Repository:
                 [(str(domain).lower(), source, now) for domain in domains],
             )
 
+    def upsert_feed_urls(self, rows: Iterable[tuple[str, str]], source: str) -> None:
+        """rows = (url_key, host). See intel.feeds.url_key()."""
+        now = utc_now()
+        with self._lock, self.conn:
+            self.conn.executemany(
+                "INSERT INTO feed_urls(url_key, host, source, updated_at) VALUES(?, ?, ?, ?) "
+                "ON CONFLICT(url_key) DO UPDATE SET source = excluded.source, updated_at = excluded.updated_at",
+                [(key[:2048], host.lower(), source, now) for key, host in rows],
+            )
+
+    def feed_lookup(self, url_key: str, host: str, site: str) -> dict:
+        """Exact-URL listing vs host listing (feed_urls host, or a legacy domain label for the site)."""
+        host, site = host.lower(), site.lower()
+        with self._lock:
+            url_row = self.conn.execute("SELECT source, updated_at FROM feed_urls WHERE url_key = ?",
+                                        (url_key[:2048],)).fetchone()
+            host_rows = self.conn.execute(
+                "SELECT source, MAX(updated_at) AS updated_at, COUNT(*) AS n FROM feed_urls WHERE host = ? "
+                "GROUP BY source", (host,)).fetchall()
+            label = self.conn.execute("SELECT source, updated_at FROM feed_labels WHERE domain IN (?, ?) "
+                                      "AND confirmed = 1", (host, site)).fetchone()
+        sources = sorted({r["source"] for r in host_rows} | ({label["source"]} if label else set())
+                         | ({url_row["source"]} if url_row else set()))
+        return {"url_listed": url_row is not None, "host_listed": bool(host_rows) or label is not None,
+                "host_listing_count": sum(int(r["n"]) for r in host_rows), "sources": sources}
+
+    def feed_freshness(self) -> str | None:
+        """When feed data was last refreshed (latest row), or None when no feed data exists."""
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT MAX(t) AS t FROM (SELECT MAX(updated_at) AS t FROM feed_urls "
+                "UNION ALL SELECT MAX(updated_at) FROM feed_labels)").fetchone()
+        return row["t"] if row and row["t"] else None
+
     def confirmed_domains(self) -> set[str]:
         with self._lock:
             rows = self.conn.execute("SELECT domain FROM feed_labels WHERE confirmed = 1").fetchall()
         return {str(row["domain"]) for row in rows}
 
+    def findings_by_source(self, source_prefix: str, limit: int = 100) -> list[dict]:
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT f.id, d.domain, f.verdict, f.score, f.reasons, "
+                "COALESCE(d.tls_issued, f.created_at) AS cert_issued, d.first_seen, "
+                "COALESCE(json_extract(f.detail, '$.source'), d.source) AS source, "
+                "COALESCE(f.clone_score, 0) AS clone, f.evidence_path AS evidence_url, "
+                "f.gallery_match, f.is_case_file, f.detail, f.created_at "
+                "FROM findings f JOIN domains d ON d.id = f.domain_id "
+                "WHERE COALESCE(json_extract(f.detail, '$.source'), d.source) LIKE ? "
+                "ORDER BY f.id DESC LIMIT ?",
+                (f"{source_prefix}%", max(1, min(int(limit), 500))),
+            ).fetchall()
+        return [self._row_to_finding(row) for row in rows]
+
+    # ------------------------------------------------------------------ live Checker
+
+    def check_request_finding(self, request_id: str) -> int | None:
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT finding_id FROM check_requests WHERE request_id = ?", (request_id,)
+            ).fetchone()
+        return int(row["finding_id"]) if row else None
+
+    def recent_check_finding(self, content_hash: str, client_hash: str, since: str) -> int | None:
+        """Same input from the same client within the window → the existing finding."""
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT finding_id FROM check_requests WHERE content_hash = ? AND client_hash = ? "
+                "AND created_at >= ? ORDER BY created_at DESC LIMIT 1",
+                (content_hash, client_hash, since),
+            ).fetchone()
+        return int(row["finding_id"]) if row else None
+
+    def insert_check_finding(
+        self,
+        *,
+        request_id: str,
+        content_hash: str,
+        client_hash: str,
+        domain: str,
+        score: float,
+        verdict: str,
+        reasons: Iterable[str],
+        l1_detail: Mapping[str, float],
+        detail: Mapping[str, Any],
+        created_at: str,
+    ) -> tuple[int, bool]:
+        """Atomically store a Checker finding + its request key. → (finding_id, created)."""
+        with self._lock, self.conn:
+            existing = self.conn.execute(
+                "SELECT finding_id FROM check_requests WHERE request_id = ?", (request_id,)
+            ).fetchone()
+            if existing:
+                return int(existing["finding_id"]), False
+            clean = str(domain).strip().rstrip(".").lower()
+            self.conn.execute(
+                "INSERT OR IGNORE INTO domains(domain, source, first_seen, enqueued) VALUES(?, 'checker', ?, 1)",
+                (clean, created_at),
+            )
+            domain_id = int(self.conn.execute("SELECT id FROM domains WHERE domain = ?", (clean,)).fetchone()["id"])
+            cursor = self.conn.execute(
+                "INSERT INTO findings(domain_id, score, verdict, reasons, l1_detail, rendered, created_at, "
+                "is_case_file, detail) VALUES(?, ?, ?, ?, ?, 0, ?, 0, ?)",
+                (domain_id, float(score), verdict, _json(list(reasons)), _json(dict(l1_detail)),
+                 created_at, _json(dict(detail))),
+            )
+            finding_id = int(cursor.lastrowid)
+            self.conn.execute(
+                "INSERT INTO check_requests(request_id, finding_id, content_hash, client_hash, created_at) "
+                "VALUES(?, ?, ?, ?, ?)",
+                (request_id, finding_id, content_hash, client_hash, created_at),
+            )
+        return finding_id, True
+
+    def search_findings(
+        self,
+        *,
+        q: str | None = None,
+        source: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        scan_limit: int = 2000,
+    ) -> list[dict]:
+        """Portal search (SQL part). Tag / input-type filters are applied by the runtime,
+        because radar findings get their tag from the trust policy at read time."""
+        clauses: list[str] = []
+        params: list[Any] = []
+        if source:
+            clauses.append("COALESCE(json_extract(f.detail, '$.source'), d.source, '') LIKE ?")
+            params.append(f"{source}%")
+        if date_from:
+            clauses.append("f.created_at >= ?")
+            params.append(date_from)
+        if date_to:
+            clauses.append("f.created_at < ?")
+            params.append(date_to)
+        if q:
+            like = f"%{q.lower()}%"
+            clauses.append(
+                "(lower(d.domain) LIKE ? OR lower(COALESCE(json_extract(f.detail, '$.submitted_input'), '')) LIKE ? "
+                "OR lower(COALESCE(json_extract(f.detail, '$.submitted_url'), '')) LIKE ? "
+                "OR lower(f.reasons) LIKE ? OR CAST(f.id AS TEXT) = ?)"
+            )
+            params.extend([like, like, like, like, q.strip().lstrip("#")])
+        where = ("WHERE " + " AND ".join(clauses) + " ") if clauses else ""
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT f.id, d.domain, f.verdict, f.score, f.reasons, "
+                "COALESCE(d.tls_issued, f.created_at) AS cert_issued, d.first_seen, "
+                "COALESCE(json_extract(f.detail, '$.source'), d.source) AS source, "
+                "COALESCE(f.clone_score, 0) AS clone, f.evidence_path AS evidence_url, "
+                "f.gallery_match, f.is_case_file, f.detail, f.created_at "
+                "FROM findings f JOIN domains d ON d.id = f.domain_id "
+                + where +
+                "ORDER BY f.created_at DESC, f.id DESC LIMIT ?",
+                (*params, max(1, min(int(scan_limit), 5000))),
+            ).fetchall()
+        return [self._row_to_finding(row) for row in rows]
+
+    def findings_with_stale_policy(self, registry_version: str, policy_version: str,
+                                   reputation_version: str | None = None) -> list[int]:
+        """Stored, tagged findings decided under a different registry, policy or reputation list."""
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT id FROM findings WHERE json_extract(detail, '$.tag') IS NOT NULL AND ("
+                "COALESCE(json_extract(detail, '$.domain_auth.registry_version'), '') != ? OR "
+                "COALESCE(json_extract(detail, '$.policy_version'), '') != ? OR "
+                "(? IS NOT NULL AND COALESCE(json_extract(detail, '$.reputation_version'), '') != ?)) ORDER BY id",
+                (registry_version, policy_version, reputation_version, reputation_version),
+            ).fetchall()
+        return [int(r["id"]) for r in rows]
+
+    def update_finding_policy(self, finding_id: int, fields: Mapping[str, Any]) -> dict | None:
+        """Apply a re-evaluated verdict to a stored finding, keeping the previous one in history."""
+        with self._lock, self.conn:
+            row = self.conn.execute("SELECT detail FROM findings WHERE id = ?", (int(finding_id),)).fetchone()
+            if row is None:
+                return None
+            detail = json.loads(row["detail"] or "{}")
+            history = list(detail.get("verdict_history") or [])
+            old_auth = detail.get("domain_auth") or {}
+            if detail.get("tag") != fields.get("tag") or old_auth.get("status") != (fields.get("domain_auth") or {}).get("status"):
+                history.append({
+                    "at": utc_now(), "tag": detail.get("tag"), "domain_auth_status": old_auth.get("status"),
+                    "registry_version": old_auth.get("registry_version"), "policy_version": detail.get("policy_version"),
+                })
+            for key in ("tag", "manual_review", "domain_auth", "trust_reasons", "blockable", "policy_version",
+                        "maliciousness", "reputation_version", "reason_codes", "final_domain_auth"):
+                if key in fields:
+                    detail[key] = fields[key]
+            detail["verdict_history"] = history[-20:]
+            self.conn.execute("UPDATE findings SET detail = ? WHERE id = ?", (_json(detail), int(finding_id)))
+        return self.get_finding(int(finding_id))
+
+    def finding_source(self, finding_id: int) -> str | None:
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT COALESCE(json_extract(f.detail, '$.source'), d.source) AS source "
+                "FROM findings f JOIN domains d ON d.id = f.domain_id WHERE f.id = ?",
+                (int(finding_id),),
+            ).fetchone()
+        return str(row["source"]) if row and row["source"] is not None else None
+
+    def verdict_counts(self) -> dict[str, int]:
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT COALESCE(json_extract(detail, '$.tag'), verdict) AS label, COUNT(*) AS n "
+                "FROM findings GROUP BY label"
+            ).fetchall()
+        return {str(r["label"]): int(r["n"]) for r in rows}
+
+    # ------------------------------------------------------------------ users / sessions / audit
+
+    def user_count(self) -> int:
+        with self._lock:
+            return int(self.conn.execute("SELECT COUNT(*) AS n FROM users").fetchone()["n"])
+
+    def create_user(self, username: str, password_hash: str, role: str) -> dict:
+        with self._lock, self.conn:
+            cur = self.conn.execute(
+                "INSERT INTO users(username, password_hash, role, active, created_at) VALUES(?, ?, ?, 1, ?)",
+                (username, password_hash, role, utc_now()),
+            )
+        return {"id": int(cur.lastrowid), "username": username, "role": role, "active": True}
+
+    def get_user(self, username: str) -> dict | None:
+        with self._lock:
+            row = self.conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+        return dict(row) if row else None
+
+    def list_users(self) -> list[dict]:
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT id, username, role, active, created_at, last_login_at FROM users ORDER BY id"
+            ).fetchall()
+        return [dict(r) | {"active": bool(r["active"])} for r in rows]
+
+    def set_user_active(self, username: str, active: bool) -> bool:
+        with self._lock, self.conn:
+            cur = self.conn.execute("UPDATE users SET active = ? WHERE username = ?", (1 if active else 0, username))
+            if not active:
+                self.conn.execute(
+                    "DELETE FROM sessions WHERE user_id = (SELECT id FROM users WHERE username = ?)", (username,)
+                )
+        return cur.rowcount > 0
+
+    def set_user_password(self, username: str, password_hash: str) -> bool:
+        with self._lock, self.conn:
+            cur = self.conn.execute("UPDATE users SET password_hash = ? WHERE username = ?", (password_hash, username))
+            self.conn.execute(
+                "DELETE FROM sessions WHERE user_id = (SELECT id FROM users WHERE username = ?)", (username,)
+            )
+        return cur.rowcount > 0
+
+    def touch_login(self, user_id: int) -> None:
+        with self._lock, self.conn:
+            self.conn.execute("UPDATE users SET last_login_at = ? WHERE id = ?", (utc_now(), int(user_id)))
+
+    def create_session(self, token_hash: str, user_id: int, csrf_token: str, expires_at: str) -> None:
+        with self._lock, self.conn:
+            self.conn.execute("DELETE FROM sessions WHERE expires_at < ?", (utc_now(),))
+            self.conn.execute(
+                "INSERT INTO sessions(token_hash, user_id, csrf_token, created_at, expires_at) VALUES(?, ?, ?, ?, ?)",
+                (token_hash, int(user_id), csrf_token, utc_now(), expires_at),
+            )
+
+    def session_user(self, token_hash: str) -> dict | None:
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT u.id, u.username, u.role, u.active, s.csrf_token, s.expires_at "
+                "FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?",
+                (token_hash,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def delete_session(self, token_hash: str) -> None:
+        with self._lock, self.conn:
+            self.conn.execute("DELETE FROM sessions WHERE token_hash = ?", (token_hash,))
+
+    def audit(self, *, username: str | None, action: str, target: str | None = None, outcome: str = "ok",
+              client_ip: str | None = None, detail: Mapping[str, Any] | None = None) -> None:
+        with self._lock, self.conn:
+            self.conn.execute(
+                "INSERT INTO audit_log(at, username, action, target, outcome, client_ip, detail) "
+                "VALUES(?, ?, ?, ?, ?, ?, ?)",
+                (utc_now(), username, action, target, outcome, client_ip, _json(dict(detail or {}))),
+            )
+
+    def list_audit(self, limit: int = 200) -> list[dict]:
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT * FROM audit_log ORDER BY id DESC LIMIT ?", (max(1, min(int(limit), 1000)),)
+            ).fetchall()
+        return [dict(r) | {"detail": json.loads(r["detail"] or "{}")} for r in rows]
+
     # ------------------------------------------------------------------ status
 
-    def counts(self) -> dict[str, int]:
+    # ------------------------------------------------------------------ sweep (WS2)
+
+    _SWEEP_COLUMNS = ("position", "url", "title", "snippet", "verdict", "score", "reasons", "finding_id")
+
+    def create_sweep_run(self, *, query: str, lang: str, channel: str, engine: str, cached: bool,
+                         query_id: str | None = None) -> dict:
+        now = utc_now()
+        with self._lock, self.conn:
+            cur = self.conn.execute(
+                "INSERT INTO sweep_runs(query, lang, channel, engine, cached, created_at, query_id) "
+                "VALUES(?, ?, ?, ?, ?, ?, ?)",
+                (query, lang, channel, engine, int(bool(cached)), now, query_id),
+            )
+        return {"id": int(cur.lastrowid), "query": query, "lang": lang, "channel": channel,
+                "engine": engine, "cached": bool(cached), "created_at": now, "query_id": query_id}
+
+    def update_sweep_run(self, run_id: int, **fields: Any) -> None:
+        """Merge status/stage/engine/... into the run's JSON state (and engine/cached columns)."""
+        with self._lock, self.conn:
+            row = self.conn.execute("SELECT state FROM sweep_runs WHERE id = ?", (int(run_id),)).fetchone()
+            if row is None:
+                return
+            state = json.loads(row["state"] or "{}")
+            state.update(fields)
+            if fields.get("status") in ("completed", "failed"):
+                state["finished_at"] = utc_now()
+            self.conn.execute("UPDATE sweep_runs SET state = ? WHERE id = ?", (_json(state), int(run_id)))
+            if "engine" in fields:
+                self.conn.execute("UPDATE sweep_runs SET engine = ? WHERE id = ?", (str(fields["engine"]), int(run_id)))
+            if "cached" in fields:
+                self.conn.execute("UPDATE sweep_runs SET cached = ? WHERE id = ?", (int(bool(fields["cached"])), int(run_id)))
+
+    def list_sweep_runs(self, limit: int = 50) -> list[dict]:
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT r.*, COUNT(s.id) AS result_count FROM sweep_runs r "
+                "LEFT JOIN sweep_results s ON s.run_id = r.id GROUP BY r.id "
+                "ORDER BY r.id DESC LIMIT ?",
+                (max(1, min(int(limit), 200)),),
+            ).fetchall()
+        return [
+            {"id": r["id"], "query": r["query"], "query_id": r["query_id"], "lang": r["lang"],
+             "channel": r["channel"], "engine": r["engine"], "cached": bool(r["cached"]),
+             "created_at": r["created_at"], "result_count": int(r["result_count"]),
+             **{k: v for k, v in json.loads(r["state"] or "{}").items() if k in ("status", "stage", "source_kind", "finished_at", "error")}}
+            for r in rows
+        ]
+
+    def add_sweep_results(self, run_id: int, results: Iterable[Mapping[str, Any]]) -> None:
+        rows = []
+        for item in results:
+            detail = {k: v for k, v in item.items() if k not in self._SWEEP_COLUMNS}
+            rows.append((run_id, int(item["position"]), str(item["url"]), item.get("title"), item.get("snippet"),
+                         item.get("verdict"), item.get("score"), _json(item.get("reasons") or []),
+                         item.get("finding_id"), _json(detail)))
+        with self._lock, self.conn:
+            self.conn.executemany(
+                "INSERT INTO sweep_results(run_id, position, url, title, snippet, verdict, score, reasons, "
+                "finding_id, detail) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                rows,
+            )
+
+    def get_sweep_run(self, run_id: int) -> dict | None:
+        with self._lock:
+            run = self.conn.execute("SELECT * FROM sweep_runs WHERE id = ?", (run_id,)).fetchone()
+            if run is None:
+                return None
+            rows = self.conn.execute(
+                "SELECT * FROM sweep_results WHERE run_id = ? ORDER BY position", (run_id,)
+            ).fetchall()
+        results = []
+        for row in rows:
+            item = {key: row[key] for key in self._SWEEP_COLUMNS}
+            item["reasons"] = json.loads(row["reasons"] or "[]")
+            item.update(json.loads(row["detail"] or "{}"))
+            results.append(item)
+        state = json.loads(run["state"] or "{}")
+        return {"id": run["id"], "query": run["query"], "lang": run["lang"], "channel": run["channel"],
+                "engine": run["engine"], "cached": bool(run["cached"]), "created_at": run["created_at"],
+                "query_id": run["query_id"], **state, "results": results}
+
+    def counts(self, mode: str = "live") -> dict[str, int]:
         evidence_files = len(list(self.evidence_dir.glob("*.jpg")))
         with self._lock:
             domain_count = self.conn.execute("SELECT COUNT(*) AS n FROM domains").fetchone()["n"]

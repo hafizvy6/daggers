@@ -5,8 +5,8 @@ The directory is a discovery index only. Every candidate is created with
 approves a domain, subdomain, or URL by itself.
 
 The parser is structure-tolerant (anchors + nearest section heading). It is
-unit-tested with an isolated test double; review the live U.AE page structure
-before using discovery results in production.
+tested against a SYNTHETIC fixture; it has NOT been validated against the live
+U.AE page structure from this environment.
 """
 from __future__ import annotations
 

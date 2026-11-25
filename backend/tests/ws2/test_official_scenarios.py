@@ -220,13 +220,18 @@ class TestPolicyInvariants(Scenario):
         )
         self.assertNotEqual(r["gov_verification"]["status"], "VERIFIED")
         self.assertEqual(r["gov_verification"]["status"], "SOURCE_UNAVAILABLE")
-        self.assertNotEqual(r["tag"], "SAFE")
+        # Policy 2.0: a retrieval gap is not evidence against the authority's OWN authenticated domain.
+        # The claim stays unverified (never VERIFIED) and the reason says so; the page is not downgraded.
+        self.assertEqual(r["tag"], "SAFE")
+        self.assertTrue(any("not independently checked" in x for x in r["trust_reasons"]))
 
     def test_class_c_cannot_authenticate_or_verify(self):
         r = self.assess("https://syntheticdaily.example/story")
         self.assertEqual(r["domain_auth"]["status"], "INDEPENDENT_MEDIA")
-        self.assertFalse(r["domain_auth"]["authenticated"])
-        self.assertEqual(r["tag"], "WARNING")
+        self.assertFalse(r["domain_auth"]["authenticated"])          # never a government source
+        self.assertTrue(r["domain_auth"]["legitimate_site"])
+        self.assertEqual(r["tag"], "SAFE")                           # policy 2.0: non-government SAFE path
+        self.assertTrue(any("not an official government source" in x for x in r["trust_reasons"]))
         r = self.assess(
             "https://parking-news.example/",
             "Synthetic Transport Authority announces free parking on National Day.",

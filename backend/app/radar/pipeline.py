@@ -9,9 +9,7 @@ from ..catalog import Catalog
 from ..config import Heartbeats, Settings
 from ..core import homograph, scorer, verdicts
 from ..vision import diff, render
-from .candidates import is_official
 from .crt import CrtPoller
-from .gate import actionable_from_context
 from .cursors import Cursors
 from .enrich import Enricher, parse_age_hours
 from .feeds import PhishFeeds
@@ -79,37 +77,19 @@ class RadarPipeline:
                 return brand
         return None
 
-    async def _context_for_row(self, row: Mapping, confirmed: set[str]) -> dict:
+    def _context_for_row(self, row: Mapping, confirmed: set[str]) -> dict:
         domain = str(row.get("domain", ""))
         age = row.get("cert_age_hours")
         if age is None:
             age = parse_age_hours(row.get("cert_issued"))
-        merged: dict = {}
-        if self.settings.enrich_enabled:
-            merged = await self.enricher.enrich(domain, cert_issued=row.get("cert_issued"))
-            self.repo.upsert_domain(
-                domain,
-                source=str(row.get("source") or "radar"),
-                cert_names=row.get("cert_names"),
-                first_seen=str(row.get("first_seen") or ""),
-                rdap_created=merged.get("rdap_created"),
-                rdap_registrar=merged.get("rdap_registrar"),
-                dns_a=merged.get("dns_a") or [],
-                tls_issued=merged.get("tls_issued"),
-                tls_issuer=merged.get("tls_issuer"),
-                favicon_hash=merged.get("favicon_hash"),
-                enqueued=False,
-            )
-            age = merged.get("cert_age_hours") or age
-        page = merged.get("page_context") or {}
         return {
             "cert_age_hours": age,
             "phishtank_confirmed": bool(row.get("phishtank_confirmed")) or self._confirmed(domain, confirmed),
             "clone_score": float(row.get("clone_score") or row.get("clone") or 0),
             "gallery_match": row.get("gallery_match"),
-            "form_action_mismatch": bool(row.get("form_action_mismatch")) or bool(page.get("form_action_mismatch")),
-            "payment_harvest_fields": bool(row.get("payment_harvest_fields")) or bool(page.get("payment_harvest_fields")),
-            "obfuscated_script": bool(row.get("obfuscated_script")) or bool(page.get("obfuscated_script")),
+            "form_action_mismatch": bool(row.get("form_action_mismatch")),
+            "payment_harvest_fields": bool(row.get("payment_harvest_fields")),
+            "obfuscated_script": bool(row.get("obfuscated_script")),
         }
 
     def _already_processed(self, row: Mapping) -> bool:
@@ -122,15 +102,8 @@ class RadarPipeline:
         domain = str(row.get("domain", ""))
         if not domain:
             raise ValueError("radar row needs a domain")
-        if is_official(domain, self.catalog.official_domains):
-            self.repo.upsert_domain(domain, source=str(row.get("source") or "radar"), first_seen=str(row.get("first_seen") or ""), enqueued=True)
-            return {"domain": domain, "skipped": True, "reason": "official-registry"}
-        analyst = self.repo.get_analyst_label(domain)
-        if analyst and str(analyst.get("label")) in {"official", "unrelated", "parked"}:
-            self.repo.upsert_domain(domain, source=str(row.get("source") or "radar"), first_seen=str(row.get("first_seen") or ""), enqueued=True)
-            return {"domain": domain, "skipped": True, "reason": f"analyst-{analyst['label']}"}
         text = str(row.get("text") or domain)
-        context = await self._context_for_row(row, confirmed)
+        context = self._context_for_row(row, confirmed)
         score_result = scorer.score_url(
             f"https://{domain}/",
             brands=list(self.catalog.brands),
@@ -140,15 +113,6 @@ class RadarPipeline:
             text=text,
             thresholds=self.settings.thresholds,
         )
-        if not actionable_from_context(
-            score=score_result.score,
-            verdict=score_result.verdict,
-            context=context,
-            min_score=self.settings.radar_min_display_score,
-        ):
-            self.repo.upsert_domain(domain, source=str(row.get("source") or "radar"), first_seen=str(row.get("first_seen") or ""), enqueued=True)
-            self.heartbeats.mark("pipeline")
-            return {"domain": domain, "skipped": True, "reason": "below-radar-action-threshold", "score": score_result.score}
         policy = verdicts.policy(
             score_result.verdict,
             score_result.score,
@@ -235,8 +199,8 @@ class RadarPipeline:
             rendered=bool(evidence_path),
         ) or finding
 
-        self.report_queue.maybe_auto_file(finding, confirmed_context=vision_context)
-        await self.report_queue.submit_queued(limit=1)
+        self.report_queue.maybe_auto_file(finding)
+        self.report_queue.submit_queued(limit=1)
         self.publish("finding", finding)
         self.heartbeats.mark("pipeline")
         return finding

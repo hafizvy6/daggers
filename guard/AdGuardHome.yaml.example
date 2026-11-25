@@ -1,0 +1,44 @@
+# Daggers Guard — AdGuard Home example (Path B, VPS). Excerpt only: merge these keys into the
+# AdGuardHome.yaml that AdGuard Home's first-run wizard creates. Never commit real passwords.
+#
+# Two ways to feed the Guard list (pick one):
+#   A) filter list (below): AdGuard Home downloads <DAGGERS>/api/guard/adguard-rules.txt itself.
+#   B) guard/sync.py (rules or rewrites mode) pushes changes within seconds of a new fake.
+http:
+  address: 0.0.0.0:3000              # admin UI — put it behind a firewall / VPN
+users:
+  - name: admin
+    password: "<bcrypt hash created by the AdGuard Home wizard>"
+dns:
+  bind_hosts:
+    - 0.0.0.0
+  port: 53
+  upstream_dns:
+    - https://cloudflare-dns.com/dns-query
+    - https://dns.quad9.net/dns-query
+  bootstrap_dns:
+    - 1.1.1.1
+    - 9.9.9.9
+  # Blocked names answer NXDOMAIN; with $dnsrewrite rules they answer your verdict server's IP.
+  blocking_mode: nxdomain
+tls:
+  enabled: true
+  server_name: guard.example.org     # your DNS-over-TLS hostname (phones: Private DNS)
+  port_https: 443
+  port_dns_over_tls: 853
+  certificate_path: /etc/letsencrypt/live/guard.example.org/fullchain.pem
+  private_key_path: /etc/letsencrypt/live/guard.example.org/privkey.pem
+filtering:
+  filtering_enabled: true
+  filters_update_interval: 1         # hours (AdGuard Home's minimum); use guard/sync.py for seconds
+filters:
+  - enabled: true
+    url: https://daggers.example.org/api/guard/adguard-rules.txt
+    name: Daggers Guard
+    id: 1700000001
+user_rules: []                       # guard/sync.py (rules mode) manages a marked block here
+querylog:
+  enabled: false                     # Daggers does not keep anyone's browsing history
+statistics:
+  enabled: true                      # aggregate counters only
+  interval: 24h

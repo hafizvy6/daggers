@@ -1,4 +1,4 @@
-"""Zero-PII guard for channel outbound traffic.
+"""Zero-PII guard for WS2 channels.
 
 * Sweep queries containing personal identifiers are refused outright.
 * Third-party titles/snippets are redacted before they are stored or returned.

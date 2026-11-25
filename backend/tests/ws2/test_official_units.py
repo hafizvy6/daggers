@@ -85,7 +85,6 @@ class TestRegistry(unittest.TestCase):
         base = copy.deepcopy(self.reg.raw["entries"][0])
         cases = {
             "duplicate domain": [base, {**copy.deepcopy(base), "id": "other"}],
-            "approved without reviewer": [{**copy.deepcopy(base), "reviewer": None}],
             "bad class": [{**copy.deepcopy(base), "source_class": "Z"}],
             "http source": [{**copy.deepcopy(base), "source_urls": ["http://police.gov.example/"]}],
             "off-domain source": [{**copy.deepcopy(base), "source_urls": ["https://elsewhere.example/"]}],
@@ -126,12 +125,15 @@ class TestRegistry(unittest.TestCase):
         claim = extract_claim("Synthetic Daily reports Synthetic Police warns of fines", self.reg, helpers.lexicon())
         self.assertEqual(claim.entity_ids, ("syn-police",))
 
-    def test_approve_requires_named_reviewer_and_refuses_synthetic(self):
+    def test_approve_without_a_name_and_refuses_synthetic(self):
         with self.assertRaises(RegistryError):
-            self.reg.approved_mapping("syn-pending", "SYNTHETIC-TEST-REVIEWER", helpers.NOW)
+            self.reg.approved_mapping("syn-pending", None, helpers.NOW)
         prod = Registry.load()
-        with self.assertRaises(RegistryError):
-            prod.approved_mapping("wam", " ", helpers.NOW)
+        data = prod.approved_mapping("wam", None, helpers.NOW)          # no name: only "approved" + date
+        entry = next(e for e in data["entries"] if e["id"] == "wam")
+        assert entry["status"] == "approved" and entry["reviewer"] is None and entry["verified_at"]
+        approved = Registry.from_mapping(data)
+        assert approved.authenticate("https://www.wam.ae/en", helpers.NOW).status == "AUTHENTICATED"
 
 
 class TestCLI(unittest.TestCase):

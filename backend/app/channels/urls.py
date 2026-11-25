@@ -1,6 +1,6 @@
 """Result-URL normalization for channel adapters (search/maps). Pure.
 
-Result URLs are only ever *scored*; they are never fetched by the channel layer.
+Result URLs are only ever *scored*; they are never fetched by WS2.
 """
 from __future__ import annotations
 

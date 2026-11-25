@@ -1,17 +1,17 @@
 To: abuse@registrar.example
-Subject: Abuse report — phishing site on your network ({domain})
+Subject: Abuse report — suspected fraudulent site on your network ({domain})
 
 Dear Abuse Team,
 
-We are reporting {domain}, registered through {registrar}, for impersonation and credential theft. The site imitates a UAE brand's login experience and forwards what visitors type to a host outside the domain.
+We are reporting {domain}, registered through {registrar}, for suspected fraud or impersonation based on the evidence below.
 
 Evidence on file:
 {reasons}
 
-This evidence was captured in a sandboxed renderer before any user interaction. The corresponding report has been filed with Abu Dhabi Police.
+DRAFT prepared by Daggers (unofficial prototype). An authorised officer must review and approve it before sending.
 
 We ask that you suspend the domain and preserve registration records for law enforcement.
 
 Regards,
-Daggers — automated abuse desk
+[authorised officer name and agency]
 reference: {domain}

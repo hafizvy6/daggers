@@ -2,7 +2,7 @@
 
 Only hosts in ``PROVIDER_HOSTS`` can be contacted, only over HTTPS, with a
 timeout and a size cap. User- or website-supplied URLs never reach this module.
-Stdlib only (httpx is not required here).
+Stdlib only (httpx is not required for WS2).
 """
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import urllib.error
 import urllib.request
 from urllib.parse import urlsplit
 
-PROVIDER_HOSTS = frozenset({"google.serper.dev", "html.duckduckgo.com", "places.googleapis.com", "nominatim.openstreetmap.org"})
+PROVIDER_HOSTS = frozenset({"google.serper.dev", "html.duckduckgo.com", "places.googleapis.com"})
 USER_AGENT = "Daggers-Research/1.0"
 
 

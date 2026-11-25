@@ -1,21 +1,20 @@
 /* ============================================================
-   Daggers · api.js — one live backend, no fixture fallback.
-   · window.API_BASE from config.js ("" = same origin)
-   · network-first GET with a last-good cache of REAL responses
-   · POST/SSE are live-only; failure is shown as unavailable
-   · empty states come from empty arrays, never invented cases
+   Daggers · api.js — the single client for the LIVE backend
+   · window.API_BASE from config.js  ("" = same origin)
+   · LIVE ONLY: no demo mode, no fixtures, no simulated results. If the backend
+     cannot answer, the UI shows an error — it never invents a verdict.
+   · SSE: event "finding" (Finding) · "heartbeat" (Status)
    ============================================================ */
 
 import { getLang } from "./i18n/i18n.js";
 
-const CACHE_PREFIX = "daggers.live.v4:";
+const CACHE_PREFIX = "daggers.api.v4:";
 
 export const state = {
-  apiDown: false,       // live service unreachable
+  user: null,           // {username, role} when signed in to the Police Portal
+  apiDown: false,       // backend unreachable
   offline: !navigator.onLine,
-  mode: "live",         // live | unavailable
-  adapters: {},         // readiness flags from /api/healthz
-  status: null,         // last /api/status response
+  mode: "live",         // the only mode
 };
 
 const listeners = new Set();
@@ -23,214 +22,263 @@ export function onState(fn) { listeners.add(fn); return () => listeners.delete(f
 function emit() { listeners.forEach((fn) => fn(state)); }
 
 export function apiBase() {
-  const value = (typeof window !== "undefined" && window.API_BASE) || "";
-  return String(value).replace(/\/$/, "");
+  const b = (typeof window !== "undefined" && window.API_BASE) || "";
+  return b.replace(/\/$/, "");
 }
-const url = (path) => `${apiBase()}${path}`;
+const url = (p) => `${apiBase()}${p}`;
 
-function setAvailable() {
-  if (!state.apiDown && state.mode === "live") return;
-  state.apiDown = false;
-  state.mode = "live";
-  emit();
-}
-
-function setUnavailable() {
-  if (state.apiDown && state.mode === "unavailable") return;
-  state.apiDown = true;
-  state.mode = "unavailable";
-  emit();
-}
-
-/* ---------------- boot: verify the live service ----------------- */
+/* ---------------- boot -------------------------------------------- */
 export async function initApi() {
   try {
-    const [health, status] = await Promise.all([
-      fetchWithTimeout(url("/api/healthz"), {}, 4000).then(requireOk).then((r) => r.json()),
-      fetchWithTimeout(url("/api/status"), {}, 4000).then(requireOk).then((r) => r.json()),
-    ]);
-    state.adapters = health.adapters || {};
-    state.status = status;
-    cacheSet("status", status);
-    setAvailable();
+    const res = await fetchWithTimeout(url("/api/status"), {}, 4000);
+    state.apiDown = !res.ok;
   } catch {
-    state.adapters = {};
-    state.status = cacheGet("status");
-    setUnavailable();
+    state.apiDown = true;
   }
   emit();
   return state;
 }
 
-export const refreshApi = initApi;
-
 export function watchNetwork() {
-  const update = () => {
-    state.offline = !navigator.onLine;
-    emit();
-    if (!state.offline) refreshApi();
-  };
-  window.addEventListener("online", update);
-  window.addEventListener("offline", update);
-  // Periodic recovery when the backend comes back without a browser network event.
-  setInterval(() => { if (state.apiDown || !navigator.onLine) refreshApi(); }, 30000);
+  const set = () => { state.offline = !navigator.onLine; emit(); };
+  window.addEventListener("online", set);
+  window.addEventListener("offline", set);
 }
 
-/* ---------------- core fetch ------------------------------------ */
+/* ---------------- core fetch ------------------------------------- */
+/* Session: HttpOnly SameSite=Strict cookie (same-origin portal) + CSRF header on writes. */
+let csrfToken = null;
+export class AuthError extends Error {
+  constructor(status) { super(`auth ${status}`); this.name = "AuthError"; this.status = status; }
+}
+
 function fetchWithTimeout(resource, opts = {}, ms = 7000) {
-  const controller = new AbortController();
-  const external = opts.signal;
-  if (external) {
-    if (external.aborted) controller.abort();
-    else external.addEventListener("abort", () => controller.abort(), { once: true });
-  }
-  const timer = setTimeout(() => controller.abort(), ms);
-  const { signal, ...rest } = opts;
-  return fetch(resource, { credentials: "omit", ...rest, signal: controller.signal })
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), ms);
+  const method = (opts.method || "GET").toUpperCase();
+  const headers = { ...(opts.headers || {}) };
+  if (method !== "GET" && csrfToken) headers["X-CSRF-Token"] = csrfToken;
+  const signal = opts.signal || ctl.signal;
+  return fetch(resource, { credentials: "same-origin", ...opts, headers, signal })
     .finally(() => clearTimeout(timer));
 }
 
-async function parseError(response) {
-  let detail = "";
-  try { const body = await response.json(); detail = body?.detail || body?.message || ""; } catch { /* non-JSON error body */ }
-  const error = new Error(detail || `HTTP ${response.status}`);
-  error.status = response.status;
-  error.detail = detail;
-  return error;
-}
-
-async function requireOk(response) {
-  if (!response.ok) throw await parseError(response);
-  return response;
-}
-
-const cacheKey = (key) => `${CACHE_PREFIX}${key}`;
-function cacheGet(key) {
-  try {
-    const raw = localStorage.getItem(cacheKey(key));
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
-}
-function cacheSet(key, value) {
-  try { localStorage.setItem(cacheKey(key), JSON.stringify(value)); } catch { /* quota */ }
-}
-function fallbackValue(fallback) {
-  if (typeof fallback === "function") return fallback();
-  if (fallback && typeof fallback === "object") return JSON.parse(JSON.stringify(fallback));
-  return fallback;
-}
-
-async function getJson(path, { cacheName, fallback = null, timeout = 7000 } = {}) {
-  try {
-    const response = await fetchWithTimeout(url(path), {}, timeout);
-    await requireOk(response);
-    const data = await response.json();
-    setAvailable();
-    if (cacheName) cacheSet(cacheName, data);
-    return data;
-  } catch (error) {
-    // A 4xx is a client error, not an outage — never flip the app to "unavailable" for it.
-    if (error?.name !== "AbortError" && (!error?.status || error.status >= 500)) setUnavailable();
-    const saved = cacheName ? cacheGet(cacheName) : null;
-    return saved !== null ? saved : fallbackValue(fallback);
+async function send(path, { method = "POST", body, timeout = 9000 } = {}) {
+  const res = await fetchWithTimeout(url(path), {
+    method, headers: body === undefined ? {} : { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  }, timeout);
+  if (res.status === 401 || res.status === 403) throw new AuthError(res.status);
+  if (!res.ok) {
+    let detail = String(res.status);
+    try { detail = (await res.json()).detail || detail; } catch { /* not JSON */ }
+    throw Object.assign(new Error(typeof detail === "string" ? detail : JSON.stringify(detail)), { status: res.status });
   }
+  return res.status === 204 ? null : res.json();
 }
 
-async function postJson(path, body, { timeout = 9000, signal } = {}) {
+/* ---------------- Police Portal session ---------------------------- */
+export async function refreshSession() {
   try {
-    const response = await fetchWithTimeout(url(path), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal,
-    }, timeout);
-    await requireOk(response);
-    const data = await response.json();
-    setAvailable();
-    return data;
-  } catch (error) {
-    if (error?.name !== "AbortError" && (!error?.status || error.status >= 500)) setUnavailable();
-    throw error;
+    const res = await fetchWithTimeout(url("/api/auth/me"), {}, 4000);
+    if (!res.ok) { state.user = null; csrfToken = null; return null; }
+    const data = await res.json();
+    state.user = data.user; csrfToken = data.csrf_token;
+  } catch { state.user = null; }
+  emit();
+  return state.user;
+}
+
+export async function login(username, password) {
+  const res = await fetchWithTimeout(url("/api/auth/login"), {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  }, 9000);
+  if (res.status === 429) throw Object.assign(new Error("locked"), { status: 429 });
+  if (!res.ok) throw Object.assign(new Error("invalid"), { status: res.status });
+  const data = await res.json();
+  state.user = data.user; csrfToken = data.csrf_token;
+  emit();
+  return data.user;
+}
+
+export async function logout() {
+  try { await send("/api/auth/logout"); } catch { /* session already gone */ }
+  state.user = null; csrfToken = null;
+  clearPrivateCache();
+  emit();
+}
+
+export const can = (role) => {
+  const rank = { viewer: 0, investigator: 1, admin: 2 };
+  return !!state.user && rank[state.user.role] >= rank[role];
+};
+
+const cacheKey = (k) => `${CACHE_PREFIX}${k}`;
+// Investigative data (findings, reports, AI, checks) is never written to device storage.
+const PRIVATE_KEYS = /^(reports|finding:|inv|ai|sweep:|check|portal)/;
+function cacheGet(k) { try { const v = localStorage.getItem(cacheKey(k)); return v ? JSON.parse(v) : null; } catch { return null; } }
+function cacheSet(k, v) {
+  if (PRIVATE_KEYS.test(k)) return;
+  try { localStorage.setItem(cacheKey(k), JSON.stringify(v)); } catch { /* quota */ }
+}
+export function clearPrivateCache() {
+  try {
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith("daggers.api.v3:") || k.startsWith("daggers.ai.")
+        || (k.startsWith(CACHE_PREFIX) && PRIVATE_KEYS.test(k.slice(CACHE_PREFIX.length))))
+      .forEach((k) => localStorage.removeItem(k));
+  } catch { /* storage unavailable */ }
+}
+
+/** Live GET. Public read views may show the last answer seen when the network drops
+    (marked `stale`); nothing is ever substituted with sample data. */
+async function get({ path, cacheName, timeout = 8000 }) {
+  const key = cacheName || path;
+  let res;
+  try {
+    res = await fetchWithTimeout(url(path), {}, timeout);
+  } catch {
+    res = null;
   }
+  if (res && (res.status === 401 || res.status === 403)) throw new AuthError(res.status);
+  if (res && res.ok) {
+    if (state.apiDown) { state.apiDown = false; emit(); }
+    const data = await res.json();
+    if (data && typeof data === "object") cacheSet(key, data);
+    return data;
+  }
+  if (!res && !state.apiDown) { state.apiDown = true; emit(); }
+  const hit = cacheGet(key);
+  if (hit) return Object.assign(Array.isArray(hit) ? hit : { ...hit }, { stale: true });
+  throw Object.assign(new Error(res ? `HTTP ${res.status}` : "network"), { status: res ? res.status : 0 });
 }
 
 /* ---------------- contract C1/C2/C3/C4 methods -------------------- */
 
-export async function getFeed({ analyst = false } = {}) {
-  const path = analyst
-    ? "/api/feed?limit=200&min_score=0&include_unknown=true&include_suppressed=true"
-    : "/api/feed?limit=100&min_score=0.35";
-  const data = await getJson(path, { cacheName: analyst ? "feed.analyst" : "feed", fallback: [] });
+export async function getFeed() {
+  const data = await get({ path: "/api/feed", cacheName: "feed" });
   const findings = Array.isArray(data) ? data : (data.findings || []);
   return findings.map(withEvidenceUrl);
 }
 
 export async function getFinding(id) {
   try {
-    const response = await fetchWithTimeout(url(`/api/finding/${id}`), {}, 7000);
-    if (response.status === 404) { setAvailable(); return null; }
-    await requireOk(response);
-    const data = await response.json();
-    setAvailable();
-    cacheSet(`finding:${id}`, data);
-    return withEvidenceUrl(data);
-  } catch {
-    setUnavailable();
-    const saved = cacheGet(`finding:${id}`);
-    return saved ? withEvidenceUrl(saved) : null;
+    return withEvidenceUrl(await get({ path: `/api/finding/${id}`, cacheName: `finding:${id}` }));
+  } catch (err) {
+    if (err instanceof AuthError) throw err;
+    return null;
   }
 }
 
-export async function getFindingLabel(id) {
-  return getJson(`/api/finding/${id}/label`, { fallback: { label: null } });
-}
-
-export async function setFindingLabel(id, label) {
-  return postJson(`/api/finding/${id}/label`, { label });
-}
-
 export async function getReports() {
-  const data = await getJson("/api/reports", { cacheName: "reports", fallback: { reports: [] } });
+  const data = await get({ path: "/api/reports", cacheName: "reports" });
   const reports = Array.isArray(data) ? data : (data.reports || []);
-  reports.forEach((report) => { if (report.evidence) withEvidenceUrl(report.evidence); });
+  reports.forEach((r) => { if (r.evidence) withEvidenceUrl(r.evidence); });
   return reports;
 }
 
+export async function fileReport(findingId) {
+  return send("/api/reports", { body: { finding_id: findingId } });
+}
+
 export async function advanceReport(id, to) {
-  return postJson(`/api/reports/${id}/advance`, { status: to });
+  return send(`/api/reports/${id}/advance`, { body: { status: to } });
 }
 
-function inferScanKind(value) {
+/* ---------------- Live Checker -------------------------------------
+   POST /api/check → the engine runs, the finding is STORED for the Police Portal,
+   and the stored finding comes back. One request id per click on "Check it":
+   a retry of the same click can never create a second finding. */
+export class CheckError extends Error {
+  constructor(code, message, status, result = null) {
+    super(message || code); this.name = "CheckError"; this.code = code; this.status = status; this.result = result;
+  }
+}
+
+export function newRequestId() {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+export async function checkInput(input, requestId) {
+  let res;
+  try {
+    res = await fetchWithTimeout(url("/api/check"), {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ input: String(input), lang: getLang() === "ar" ? "ar" : "en", request_id: requestId }),
+    }, 30000);
+  } catch (err) {
+    if (!state.apiDown) { state.apiDown = true; emit(); }
+    throw new CheckError(err?.name === "AbortError" ? "timeout" : "backend_unreachable", "", 0);
+  }
+  if (state.apiDown) { state.apiDown = false; emit(); }
+  let body = null;
+  try { body = await res.json(); } catch { /* not JSON */ }
+  if (res.ok && body && typeof body === "object") return withEvidenceUrl(body);
+  const detail = body && body.detail;
+  if (detail && typeof detail === "object" && !Array.isArray(detail)) {
+    throw new CheckError(detail.code || `http_${res.status}`, detail.message || "", res.status, detail.result || null);
+  }
+  throw new CheckError(res.status === 422 ? "invalid" : `http_${res.status}`, "", res.status);
+}
+
+/** Client-side pre-check only (the backend validates again). Mirrors checker.classify limits. */
+export function validateInput(value) {
   const text = String(value || "").trim();
-  const digits = text.replace(/[^\d]/g, "");
-  if (/^[+\d][\d\s().-]{4,}$/.test(text) && digits.length >= 6) return "number";
-  if (/^https?:\/\//i.test(text) || /\.[a-z]{2,}(?:[/?#]|$)/i.test(text)) return "url";
-  return "text";
+  if (!text) return "empty";
+  if (text.length > 4000) return "too_long";
+  if (!/\s/.test(text) && /^(javascript|data|file|vbscript):/i.test(text)) return "unsupported_scheme";
+  return null;
 }
 
-export async function scan(input, kind) {
-  const data = await postJson("/api/scan", {
-    kind: kind || inferScanKind(input),
-    input,
-    lang: getLang(),
-  });
-  return scanResult(data);
+/* ---------------- Police Portal: findings index ---------------------- */
+export async function searchFindings(filters = {}) {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(filters)) if (v !== undefined && v !== null && v !== "") q.set(k, v);
+  const data = await send(`/api/portal/findings?${q}`, { method: "GET" });
+  data.findings = (data.findings || []).map(withEvidenceUrl);
+  return data;
 }
 
-function scanResult(result) {
-  const out = { ...result };
-  if (out.finding_id && !out.evidence_url) out.evidence_url = evidenceUrl(out.finding_id);
-  return out;
-}
-
-/** A SweepRun is created by POST. Unconfigured adapters produce an honest empty run. */
-export async function getSweep(channel = "web", query, queryId) {
-  const body = { channel, lang: getLang() };
-  if (queryId) body.query_id = queryId;
-  else if (query) body.query = query;
-  const run = await postJson("/api/sweep", body, { timeout: 15000 });
-  cacheSet(`sweep:${channel}`, run);
+/** Sweep: POST creates a persisted run (202, status=running) → poll GET /api/sweep/{id}.
+    Requires an investigator session. */
+export async function getSweep(channel = "web", query, { onProgress } = {}) {
+  const body = { channel, lang: getLang() === "ar" ? "ar" : "en" };
+  if (query) body.query = query;
+  let run = await send("/api/sweep", { body, timeout: 9000 });
+  const deadline = Date.now() + 60000;
+  while (run && run.status === "running" && Date.now() < deadline) {
+    onProgress?.(run);
+    await new Promise((r) => setTimeout(r, 800));
+    run = await send(`/api/sweep/${run.id}`, { method: "GET" });
+  }
   return withSweepUrls(run);
+}
+
+export async function listSweeps() {
+  return (await send("/api/sweep", { method: "GET" })).runs || [];
+}
+
+/* ---------------- Police Portal: investigations, registry, audit ---- */
+export async function investigate(urlValue, pageText) {
+  return send("/api/investigations", { body: { url: urlValue, page_text: pageText || null }, timeout: 20000 });
+}
+export async function getInvestigations() {
+  return (await send("/api/investigations", { method: "GET" })).findings || [];
+}
+export async function getRegistry() {
+  return send("/api/registry", { method: "GET" });
+}
+export async function getGuardSync() {
+  return send("/api/guard/sync-status", { method: "GET" });
+}
+export async function getAudit() {
+  return (await send("/api/admin/audit?limit=100", { method: "GET" })).entries || [];
+}
+export async function getReadiness() {
+  return send("/api/readiness", { method: "GET" });
 }
 
 function withSweepUrls(run) {
@@ -238,151 +286,133 @@ function withSweepUrls(run) {
   return run;
 }
 
-export async function getGuardConfig() {
-  return getJson("/api/guard/config", {
-    cacheName: "guard:config",
-    fallback: { hostname: null, configured: false },
-  });
-}
-
 export async function getGuardStats() {
-  return getJson("/api/guard/stats", {
-    cacheName: "guard:stats",
-    fallback: { blocked_domains: 0, blocked_hits: 0, blocked_today: 0, feed_size: 0, mode: "unavailable" },
-  });
+  return get({ path: "/api/guard/stats", cacheName: "guard:stats" });
 }
 
-/** Canonical sweep queries from the live service. No sample findings or phone numbers. */
+/* ---------------- Guard (live) ------------------------------------- */
+export async function syncGuard() {
+  return send("/api/guard/sync", { timeout: 30000 });
+}
+/** Guard lookup; live=true also runs the engine on https://<domain>/ (lists it if confirmed FAKE). */
+export async function guardCheck(domain, live = false) {
+  return send(`/api/guard/check?domain=${encodeURIComponent(domain)}&live=${live ? 1 : 0}`,
+    { method: "GET", timeout: 30000 });
+}
+/** Verdict-page data. hit=true records one anonymous block (no personal data). */
+export async function guardVerdict(domain, hit = false) {
+  return send(`/api/guard/verdict?domain=${encodeURIComponent(domain)}&hit=${hit ? 1 : 0}`, { method: "GET" });
+}
+export function absoluteUrl(path) {
+  if (/^https?:/.test(path || "")) return path;
+  return `${apiBase() || location.origin}${path}`;
+}
+
+/** Curated Sweep query presets from the backend (no sample findings). */
 export async function getExamples() {
-  const empty = { check: [], numbers: [], sweep_web: [], sweep_maps: [] };
-  return getJson("/api/examples", { cacheName: "examples", fallback: empty });
+  return get({ path: "/api/examples", cacheName: "examples" });
 }
 
 export async function getStatus() {
-  return getJson("/api/status", {
-    cacheName: "status",
-    fallback: { mode: "unavailable", heartbeats: {}, counts: { domains: 0, findings: 0, evidence: 0 }, uptime_s: 0 },
-  });
+  return get({ path: "/api/status", cacheName: "status" });
 }
 
-/* ---------------- AI: live SSE and live takedown only -------------- */
+/* ---------------- AI (WS3 provides) -------------------------------- */
 
+/**
+ * POST /api/report/{id}/analysis → SSE text deltas.
+ * onDelta(text) · returns final {summary_en, summary_ar, provider, fallback}.
+ * The backend chooses the provider (Gemini → Groq → evidence-only template).
+ */
 export async function streamAnalysis(reportId, { onDelta, signal } = {}) {
-  return streamSSE(url(`/api/report/${reportId}/analysis`), { onDelta, signal });
+  return streamSSE(url(`/api/report/${String(reportId)}/analysis`), { onDelta, signal });
 }
 
 async function streamSSE(endpoint, { onDelta, signal }) {
-  const response = await fetchWithTimeout(endpoint, {
-    method: "POST",
-    headers: { Accept: "text/event-stream" },
-    signal,
+  const res = await fetchWithTimeout(endpoint, {
+    method: "POST", headers: { Accept: "text/event-stream" }, signal,
   }, 30000);
-  if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
+  if (res.status === 401 || res.status === 403) throw new AuthError(res.status);
+  if (!res.ok || !res.body) throw new Error(String(res.status));
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "";
   let final = null;
   for (;;) {
     const { value, done } = await reader.read();
     if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const frames = buffer.split("\n\n");
-    buffer = frames.pop() || "";
+    buf += dec.decode(value, { stream: true });
+    const frames = buf.split("\n\n");
+    buf = frames.pop() || "";
     for (const frame of frames) {
-      let event = "message";
-      let data = "";
-      for (const line of frame.split("\n")) {
+      const lines = frame.split("\n");
+      let event = "message", data = "";
+      for (const line of lines) {
         if (line.startsWith("event:")) event = line.slice(6).trim();
         else if (line.startsWith("data:")) data += line.slice(5).trim();
       }
       if (!data) continue;
-      let payload;
-      try { payload = JSON.parse(data); } catch { payload = { delta_text: data }; }
+      let payload; try { payload = JSON.parse(data); } catch { payload = { delta_text: data }; }
       if (event === "delta" || payload.delta_text) onDelta?.(payload.delta_text ?? "");
       if (event === "final" || payload.summary_en) final = payload;
     }
   }
   if (!final) throw new Error("stream ended without final event");
-  setAvailable();
   return final;
 }
 
 export async function getTakedown(reportId) {
-  return postJson(`/api/report/${reportId}/takedown`, {}, { timeout: 25000 });
+  return send(`/api/report/${reportId}/takedown`, { timeout: 25000 });
 }
 
 /* ---------------- SSE: live feed + heartbeat ----------------------- */
-export function connectStream({ onFinding, onHeartbeat } = {}) {
-  let source = null;
-  let retry = null;
-  let closed = false;
-  let unsubscribe = null;
-
-  const scheduleRetry = () => {
-    if (closed || retry) return;
-    retry = setTimeout(() => { retry = null; open(); }, 15000);
-  };
-
-  const open = () => {
-    if (closed || state.offline || state.apiDown) { scheduleRetry(); return; }
-    try {
-      source = new EventSource(url("/api/stream"));
-    } catch {
-      setUnavailable();
-      scheduleRetry();
-      return;
-    }
-    source.addEventListener("open", () => setAvailable());
-    source.addEventListener("finding", (event) => {
-      try { onFinding?.(withEvidenceUrl(JSON.parse(event.data))); } catch { /* ignore malformed event */ }
-    });
-    source.addEventListener("heartbeat", (event) => {
-      try { onHeartbeat?.(JSON.parse(event.data)); } catch { /* ignore malformed event */ }
-    });
-    source.addEventListener("error", () => {
-      setUnavailable();
-      source?.close();
-      source = null;
-      scheduleRetry();
-    });
-  };
-
-  unsubscribe = onState((current) => {
-    if (!current.offline && !current.apiDown && !source) open();
+export function connectStream({ onFinding, onHeartbeat, onGuard } = {}) {
+  let es;
+  try {
+    es = new EventSource(url("/api/stream"));
+  } catch { return { close() {} }; }
+  es.addEventListener("finding", (e) => {
+    try { onFinding?.(withEvidenceUrl(JSON.parse(e.data))); } catch { /* ignore */ }
   });
-  open();
-
-  return {
-    available: true,
-    close() {
-      closed = true;
-      if (retry) clearTimeout(retry);
-      if (unsubscribe) unsubscribe();
-      source?.close();
-      source = null;
-    },
-    inject() {},
-  };
+  es.addEventListener("heartbeat", (e) => {
+    try { onHeartbeat?.(JSON.parse(e.data)); } catch { /* ignore */ }
+  });
+  es.addEventListener("guard", (e) => {
+    try { onGuard?.(JSON.parse(e.data)); } catch { /* ignore */ }
+  });
+  return { close: () => es.close() };
 }
 
 /* ---------------- evidence helpers -------------------------------- */
 export function evidenceUrl(finding) {
-  const value = typeof finding === "object" ? finding?.evidence_url : null;
-  if (!value) return null;
-  const text = String(value);
-  if (/^https?:/.test(text)) return text;
-  const base = apiBase();
-  return base ? `${base}${text.startsWith("/") ? text : `/${text}`}` : text;
+  const f = typeof finding === "object" ? finding : null;
+  if (f?.evidence_url) {
+    if (/^https?:/.test(f.evidence_url)) return f.evidence_url;
+    const base = apiBase();
+    return base ? `${base}${f.evidence_url}` : f.evidence_url;
+  }
+  return null;
+}
+export function withEvidenceUrl(f) {
+  if (f && typeof f === "object") f.evidence_url = evidenceUrl(f);
+  return f;
 }
 
-export function withEvidenceUrl(finding) {
-  if (finding && typeof finding === "object") finding.evidence_url = evidenceUrl(finding);
-  return finding;
+/* ONE verdict system: the backend's `tag` (SAFE | WARNING | MISLEADING | FAKE) is
+   authoritative. Legacy objects without a tag are mapped conservatively: an engine
+   verdict can never become SAFE in the UI (UNKNOWN → warning). */
+export const VERDICT_TAG = { MALICIOUS: "fake", SUSPICIOUS: "warning", MISLEADING: "misleading", UNKNOWN: "warning" };
+const TAGS = new Set(["safe", "warning", "misleading", "fake"]);
+export function tagFor(x) {
+  if (x && typeof x === "object") {
+    const tag = String(x.tag || "").toLowerCase();
+    if (tag === "safe") {
+      // SAFE needs the backend's proof: an authenticated government domain OR an approved legitimate site.
+      const a = x.domain_auth;
+      return a && (a.authenticated === true || a.legitimate_site === true) ? "safe" : "warning";
+    }
+    if (TAGS.has(tag)) return tag;
+    return VERDICT_TAG[String(x.verdict || "").toUpperCase()] || "warning";
+  }
+  return VERDICT_TAG[String(x || "").toUpperCase()] || "warning";
 }
-
-/* verdict → tag */
-export const VERDICT_TAG = {
-  MALICIOUS: "fake", SUSPICIOUS: "warning", MISLEADING: "misleading",
-  SAFE: "safe", UNKNOWN: "unknown", QUEUED: "warning",
-};
-export const tagFor = (verdict) => VERDICT_TAG[String(verdict || "").toUpperCase()] || "unknown";

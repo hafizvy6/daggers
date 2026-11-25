@@ -1,16 +1,19 @@
-/* Daggers · service worker — cache-first shell; network-first for live API GETs.
-   Only real successful API responses are cached. No fixture or evidence bundle. */
-const VERSION = "daggers-live-v4.0.0";
+/* Daggers · service worker — cache-first app shell + fonts + icons;
+   network-first for PUBLIC /api reads only. Checks (POST /api/check) and every
+   portal / investigative response always go to the network and are never stored. */
+const VERSION = "daggers-v5.0.0";
+// Only PUBLIC, non-investigative API reads may be cached on the device.
+const PUBLIC_API = new Set(["/api/feed", "/api/status", "/api/guard/stats", "/api/examples", "/api/mode"]);
 const SHELL = [
   "./", "./index.html", "./config.js", "./manifest.json",
   "./css/tokens.css", "./css/base.css", "./css/layout.css", "./css/components.css",
-  "./js/app.js", "./js/api.js",
+  "./js/main.js", "./js/app.js", "./js/api.js",
   "./js/i18n/i18n.js", "./js/i18n/en.json", "./js/i18n/ar.json",
   "./js/components/icons.js", "./js/components/tag.js", "./js/components/toast.js",
   "./js/components/empty.js", "./js/components/skeleton.js", "./js/components/evidence.js",
   "./js/views/_shared.js", "./js/views/feed.js", "./js/views/finding.js", "./js/views/sweep.js",
-  "./js/views/check.js", "./js/views/number.js", "./js/views/portal.js",
-  "./js/views/portal_fallback.js", "./js/views/guard.js", "./js/views/verdict.js",
+  "./js/views/check.js", "./js/views/portal.js", "./js/components/analysis.js",
+  "./js/views/guard.js", "./js/views/verdict.js", "./js/views/login.js",
   "./fonts/plex-sans-400.woff2", "./fonts/plex-sans-500.woff2", "./fonts/plex-sans-600.woff2",
   "./fonts/plex-sans-700.woff2", "./fonts/plex-mono-400.woff2", "./fonts/plex-mono-500.woff2",
   "./fonts/plex-mono-600.woff2",
@@ -19,61 +22,62 @@ const SHELL = [
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/maskable-512.png",
 ];
 
-self.addEventListener("install", (event) => {
-  event.waitUntil((async () => {
+self.addEventListener("install", (e) => {
+  e.waitUntil((async () => {
     const cache = await caches.open(VERSION);
-    await Promise.allSettled(SHELL.map((path) => cache.add(path)));
+    await Promise.allSettled(SHELL.map((u) => cache.add(u)));
     self.skipWaiting();
   })());
 });
 
-self.addEventListener("activate", (event) => {
-  event.waitUntil((async () => {
+self.addEventListener("activate", (e) => {
+  e.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys.filter((key) => key !== VERSION).map((key) => caches.delete(key)));
+    await Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k)));
     self.clients.claim();
   })());
 });
 
-self.addEventListener("fetch", (event) => {
-  const request = event.request;
-  if (request.method !== "GET") return;
-  const url = new URL(request.url);
+self.addEventListener("fetch", (e) => {
+  const req = e.request;
+  if (req.method !== "GET") return;
+  const url = new URL(req.url);
 
-  // Never buffer a live SSE stream.
+  // never buffer a live SSE stream
   if (url.pathname === "/api/stream") return;
 
-  // API GET: network-first, with a last-good REAL response only.
+  // Investigative / authenticated API data is never stored by the service worker.
+  if (url.pathname.startsWith("/api/") && !PUBLIC_API.has(url.pathname)) return;
+
+  // Public API: network-first, last-good cache fallback
   if (url.pathname.startsWith("/api/")) {
-    event.respondWith((async () => {
+    e.respondWith((async () => {
       try {
-        const response = await fetch(request);
-        if (response.ok) {
-          const cache = await caches.open(VERSION);
-          cache.put(request, response.clone());
-        }
-        return response;
+        const res = await fetch(req);
+        const cache = await caches.open(VERSION);
+        if (res.ok) cache.put(req, res.clone());
+        return res;
       } catch {
-        const cached = await caches.match(request);
-        return cached || Response.error();
+        const hit = await caches.match(req, { ignoreVary: true });
+        return hit || Response.error();
       }
     })());
     return;
   }
 
-  // Static shell/assets: cache-first, with an app-shell fallback for navigation.
-  event.respondWith((async () => {
-    const cached = await caches.match(request, {
-      ignoreSearch: url.pathname === "/" || url.pathname.endsWith("index.html"),
-    });
-    if (cached) return cached;
+  // shell/assets: cache-first
+  e.respondWith((async () => {
+    // ignoreVary: static files carry "Vary: Origin" (CORS); module scripts send an Origin
+    // header that the precache requests did not, which would otherwise miss the cache offline.
+    const hit = await caches.match(req, { ignoreVary: true, ignoreSearch: url.pathname === "/" || url.pathname.endsWith("index.html") });
+    if (hit) return hit;
     try {
-      const response = await fetch(request);
-      if (response.ok && url.origin === self.location.origin) {
+      const res = await fetch(req);
+      if (res.ok && url.origin === self.location.origin) {
         const cache = await caches.open(VERSION);
-        cache.put(request, response.clone());
+        cache.put(req, res.clone());
       }
-      return response;
+      return res;
     } catch {
       return (await caches.match("./index.html")) || Response.error();
     }

@@ -126,7 +126,7 @@ def extract_claim(text: str, registry: Registry, lexicon: Lexicon) -> Claim:
     canonical = normalize.normalize_text(focused)
     entities = registry.resolve_entities(raw)
     # Independent media mentioned in the text is a reporter, not the claimed entity.
-    claimed = [entry for entry in entities if entry.source_class != "C"]
+    claimed = [entry for entry in entities if entry.source_class not in ("C", "P")]  # never government
     amounts = tuple(sorted({amount.aed for amount in normalize.extract_amounts(focused)}))
     topic_text = strip_entity_names(focused, registry)
     return Claim(

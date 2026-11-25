@@ -17,6 +17,10 @@ __pycache__/
 .coverage
 htmlcov/
 
+# Node / tooling
+node_modules/
+ops/demo/snapshot-*/
+
 # Build / editor / OS
 dist/
 build/

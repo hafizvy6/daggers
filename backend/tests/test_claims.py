@@ -12,7 +12,7 @@ def test_english_giveaway_with_amount_and_entity(catalog):
     assert signal is not None
     assert signal.weight == 0.50
     assert signal.forced_min == "MISLEADING"
-    assert "unverifiable claim — not found on official channels" in signal.reason
+    assert "unverifiable claim — not confirmed by an authenticated official source" in signal.reason
     assert "amount" in signal.matched_patterns
 
 

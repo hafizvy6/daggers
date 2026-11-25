@@ -1,87 +1,104 @@
-# Daggers — Architecture
+# Daggers — Final architecture
 
-## Runtime shape
+## 1. Shape
 
-One Python 3.11+ FastAPI process serves REST, SSE, the static `web/` PWA, static evidence, and runs the (opt-in) asyncio loops. SQLite WAL is the sole durable store; sweep runs persist through `db/repo.py`. Heavy browser/vision work is optional and disabled by default.
+One FastAPI process (modular monolith) serves the API **and** the PWA/Police Portal on the same
+origin. SQLite (WAL) is the single database. Caddy terminates HTTPS in production. The Chrome
+extension and Guard (NextDNS) are clients of the same API.
 
-```text
-                         ┌──────────────────────────────────────────────┐
- PUBLIC ADAPTERS         │ BACKEND — uvicorn backend.app.main:app :8000   │  CONSUMERS
-─────────────────        │                                              │ ─────────────────
- crt.sh / CT logs ──────▶│ radar/crt.py ─┐          (CRT_ENABLED=1)     │  PWA / portal
- OpenPhish/URLhaus ─────▶│ radar/feeds.py├─▶ radar/pipeline.py           │  extension/
- RDAP/DNS/TLS/favicon    │ radar/enrich.py┘        │  (ENRICH_ENABLED)   │  guard/ sync
- Serper/DuckDuckGo       │ channels/search.py      │  (SEARCH_LIVE_ENABLED)             │
- Google Places           │ channels/maps.py        │  (MAPS_LIVE_ENABLED)│             │
- Playwright + pHash ────▶│ vision/**               │  (RENDER_ENABLED)   │  /docs OpenAPI
-                         │                         ▼                     │
-                         │              core/  ★ THE BRAIN               │
-                         │  scorer · homograph · claims · numbers        │
-                         │  verdicts · brands.yaml · lures.yaml          │
-                         │                         │                     │
-                         │       ┌─────────────────┼────────────────┐    │
-                         │       ▼                 ▼                ▼    │
-                         │ db/repo.py        reports/**          api/**   │
-                         │ SQLite WAL        zero-PII C4         C1/C2/C6 │
-                         │ empty-on-boot   auto-dossier rule    SSE/REST  │
-                         └──────────────────────────────────────────────┘
-                                     │
-                                     ▼
-                         /evidence/{id}.jpg  ·  /api/guard/feed JSONL
+```
+ Browser (PWA + Police Portal)      Chrome extension (MV3)        NextDNS (Guard)
+        │ same-origin, cookie session      │ POST /api/scan            │ blocklist.txt
+        ▼                                  ▼                           ▼
+ ┌──────────────────────────── Caddy (HTTPS) ───────────────────────────────────────┐
+ │ FastAPI app (backend/app/main.py)                                                │
+ │  middleware: security headers · CORS (public, no credentials)                    │
+ │  routers: auth · system · examples · check · findings · scan · health · stream · │
+ │           investigations                                                         │
+ │           reports · ai · sweep · guard                                           │
+ │  Runtime ── the ONE verdict path ───────────────────────────────────────────┐   │
+ │   core/scorer (WS1)  →  channels/scoring.ShieldScorer  →  trust_policy.decide │   │
+ │   evidence, score        registry auth + claim verification   → tag           │   │
+ │  radar/ (crt.sh, feeds, enrich) · vision/ · reports/queue (auto-file)        │   │
+ │  channels/: search · maps · sweep (background jobs) · guard blocklist        │   │
+ │  ai/: Gemini → Groq → evidence-only template (never sets the tag)            │   │
+ │  security.py: scrypt passwords, sessions, roles, CSRF, rate limits, audit    │   │
+ │  db/repo.py: ALL SQL ── SQLite WAL (findings, reports, sweeps, users, audit) │   │
+ └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Boundaries
+## 2. Integration map (authoritative implementations)
 
-| Boundary | Rule |
-|---|---|
-| `core/**` | Pure functions only. No SQL, HTTP, file I/O, logging, or clock reads. External facts arrive through `context`. |
-| `db/repo.py` | The only Python file containing SQL. `schema.sql` is the schema source. Boot initializes an empty schema; no rows are inserted. |
-| `api/**` | Thin HTTP adapters. No verdict logic, no SQL. |
-| `radar/**` | Every external call has `httpx`/`asyncio` timeouts. When disabled/unconfigured the loop exits immediately and reports an honest heartbeat; nothing fabricates a finding. |
-| `vision/**` | Hard 15-second renderer timeout; no downloads, credentials, or form submission. Optional imports degrade to "no evidence available" (never an invented image). |
-| `reports/**` | Recursive allowlist + forbidden-key/contact-value checks. No user input is accepted. |
-| `main.py` | Owns `Runtime`, event bus, optional router mounting, and lifespan tasks. |
-
-## Five flows
-
-1. **Radar**: CT row → normalize → enrichment → triage → `core.scorer` → *(optional) real evidence JPG* → finding → SSE → automatic portal dossier → Guard JSONL. Disabled by default; enable per adapter flag.
-2. **Checker**: `POST /api/scan` → URL/text/number rules → exact `ScanResult`. No network call; the input is echoed, never persisted.
-3. **Sweep**: `POST /api/sweep` with a canonical `query_id` (or a typed query — allowed by default, refused with 403 when an operator sets `SWEEP_ALLOW_ARBITRARY=0`) → Search/Maps adapter → same brain → rows persisted, `source_kind` honestly `live` or `unconfigured`.
-4. **Report → AI**: `reports/builder.py` builds the C4 evidence bundle from a C1 Finding. `api/ai.py` streams an explanation built solely from that bundle; AI never writes `verdict`, `score`, or `reasons`.
-5. **Guard**: `GET /api/guard/feed` emits one policy-filtered JSONL row per confirmed fake; `guard/sync_nextdns.py` pushes them to NextDNS when an operator runs it with a key and profile.
-
-## Resilience without fabrication
-
-- Every adapter is opt-in. With zero flags set, the app is a healthy, quiet system: empty feed, zero counts, SSE heartbeats, full OpenAPI — and nothing invented.
-- crt.sh politeness: at most one query per `CRT_MIN_QUERY_GAP_S` (default 20s), custom `Daggers-Research/1.0` UA, and a poll loop.
-- Every adapter failure returns an empty artifact instead of breaking a finding; findings are never synthesized to fill a gap.
-- `RENDER_ENABLED=0` keeps evidence absent rather than simulated. `RENDER_ENABLED=1` requires `make install-render` and still produces only real captures.
-- Sweep typed queries are PII-filtered, length-capped and rate-limited per IP; an operator can set `SWEEP_ALLOW_ARBITRARY=0` to restrict the endpoint to canonical queries (recommended behind a paid search key).
-
-## Security and privacy
-
-- Reports carry only fake-site artifacts; `builder.py` rejects user-like keys and contact-like values recursively.
-- `/api/scan` echoes input to the caller but never stores it.
-- CORS is an explicit origin allowlist from `CORS_ORIGINS`; the optional regex is for controlled Pages deployments.
-- The renderer aborts non-read requests, disables downloads, and never fills or submits forms.
-- Provider keys are server-side only (`GEMINI_KEY`, `GROQ_KEY`, `SERPER_API_KEY`, `GOOGLE_PLACES_API_KEY`, `PHISHTANK_KEY`, `NEXTDNS_API_KEY`). The browser, the PWA bundle, and the MV3 extension never receive them; `/api/healthz` reports booleans only.
-
-## Module map
-
-| Path | Role | Joins to the brain by |
+| Shared concern | Authoritative implementation | Replaced / removed |
 |---|---|---|
-| `core/**` | Deterministic scorer, homograph/claim/number rules, brand/lure catalogs | pure functions, `context` dicts |
-| `radar/**` | crt.sh poller, phishing feeds, enrichment, pipeline, cursors | emits `Finding` via `db/repo.py`, publishes SSE |
-| `vision/**` | optional Playwright render, pHash/ORB compare, evidence composer, gallery index loader | `RENDER_ENABLED`, operator-supplied gallery |
-| `channels/**` | sweep engine, Search/Maps adapters, official-registry verification | in-process `core.scorer`, persisted via `repo.py` |
-| `channels/official/**` | human-approved registry of official domains (CLI: approve/revoke/verify/fetch) | feeds S2 identity checks when approved |
-| `db/**` | SQLite schema + repository; the only SQL | `schema.sql` |
-| `reports/**` | C4 builder (zero-PII), queue, automatic dossier policy | `finding_id` → evidence bundle |
-| `ai/**` | provider chain (Gemini → Groq → template), prompt builder, evidence-only filter | `Report.evidence` in, text out |
-| `api/**` | health, findings, scan, stream, sweep, guard, reports, AI, examples | thin HTTP adapters |
-| `web/**` | bilingual (EN/AR, RTL) PWA, service worker, i18n catalogs | fetches/SSE against same origin |
-| `extension/**` | MV3: pins action title to `/api/scan` verdict | same-origin or configured API base |
-| `guard/**` | NextDNS sync script for operators | reads `/api/guard/feed`, pushes via NextDNS API |
-| `ops/**` | `check_syntax.mjs`, `check_i18n.py`, `verify_empty.py` gates and tooling | CI/pre-flight |
+| Backend entry point | `backend/app/main.py` (WS1, extended) | WS3 `backend/app/server.py` (stand-in server) — removed |
+| Data store | `backend/app/db/repo.py` + `schema.sql` (WS1, extended) | WS3 `backend/app/store.py` (in-memory) — removed |
+| Scoring | `backend/app/core/scorer.py` (WS1) | WS3 `web/js/api.js` offline heuristic kept **only** for the offline tier; it can no longer emit SAFE |
+| Final verdict / tag | `backend/app/channels/trust_policy.py` via `Runtime.tag()` / `scan()` / `investigate()` | WS1 `verdicts.UI_TAGS` (UNKNOWN→SAFE) corrected to UNKNOWN→WARNING; WS3 `VERDICT_TAG` (verdict→tag) replaced by `tagFor(object)` using the backend `tag` |
+| Reports API | `backend/app/api/reports.py` on WS1 repo | WS3 store-backed version |
+| AI Analyst | `backend/app/ai` (WS3) with server-built grounded evidence | WS3 template that asserted unverified facts — rewritten |
+| Sweep storage | `RepoSweepStore` (SQLite) | WS2 in-memory store remains only as test/fallback implementation |
+| Guard feed | WS1 `get_guard_rows` → `Runtime.guard_rows` (registry-filtered) → WS2 blocklist | — |
+| Router mounting | explicit `ROUTERS` tuple in `main.py` | WS1 "optional router" probing |
 
-There is one app, one store, and one verdict implementation — historical lane boundaries (WS1/WS2/WS3) are gone; the tree is a single integrated codebase.
+## 3. Data flows
+
+**Portal investigation (the mandatory end-to-end flow)**
+`POST /api/investigations {url, page_text}` (investigator) → URL normalised (tracking params removed,
+non-http rejected) → `ShieldScorer.assess_url` → WS1 `score_url` (lexical, identity, homograph,
+claims) → registry authentication of the exact host → claim extraction + official verification
+against approved records → `trust_policy.decide` → **finding persisted** (`findings` + `detail` JSON:
+tag, domain_auth, gov_verification with evidence & provenance, signals, submitted URL,
+investigator, policy version) → audit entry → response → portal navigates to `#/finding/{id}`,
+which re-reads the stored record.
+
+**Live Checker (the main public path)**: `POST /api/check` → `checker.classify` (URL/domain vs
+message, normalisation, validation) → `core.scorer.score_request` (URL signals for the link, or for
+every link in a message, + `core.message` content analysis: credential/OTP requests, payment
+demands, delivery lures, urgency, brand/government impersonation, link shorteners) →
+`ShieldScorer.apply_to_scan_result` (registry authentication of the link that drove the verdict +
+official claim verification against records in the snapshot store) → `checker.redact` (personal
+data removed from the message and excerpts) → `repo.insert_check_finding` (finding + request id in
+one transaction; duplicates by request id / same input within 120 s) → response = the stored
+finding → Police Portal `GET /api/portal/findings`, `GET /api/finding/{id}`.
+
+**Extension**: `POST /api/scan` → the same engine + trust policy → `tag`; input is not stored.
+
+**Sweep**: `POST /api/sweep` → run row (status running) → background thread → provider chain →
+each result scored by the same path → results stored → FAKE/MISLEADING live results become findings
+(`source = sweep:web|maps`) → run status completed/failed → SSE `sweep`.
+
+**Radar**: WS1 pipeline writes findings; every read (`/api/feed`, `/api/finding`, SSE) passes through
+`Runtime.tag()` so radar findings carry the same tag.
+
+**Report → AI**: `POST /api/reports` stores zero-PII evidence (C1 + tag + evidence_id).
+`POST /api/report/{id}/analysis` builds the AI input server-side from the stored report + finding
+(authentication, verification sources) and stores the result on the report.
+
+**Guard**: `Runtime.guard_rows` (MALICIOUS, never registry domains) → `/api/guard/feed` and the WS2
+blocklist (MALICIOUS only, valid names, ≤30 days, deduplicated) → NextDNS script (manual).
+
+## 4. Database (SQLite, WAL)
+
+| Table | Purpose | Notes |
+|---|---|---|
+| `domains`, `findings` | findings and their domain | `findings.detail` JSON (migration) holds tag, authentication, verification evidence, signals, source and, for Checker findings, the full analysis |
+| `reports` | police reports | `evidence` zero-PII JSON; `ai` JSON (migration) |
+| `sweep_runs`, `sweep_results` | sweeps | `sweep_runs.state` (status/stage/source_kind/errors), `query_id`; `sweep_results.detail` |
+| `users`, `sessions`, `audit_log` | portal security | sessions store SHA-256 of the token only |
+| `check_requests` | Checker de-duplication | `request_id` (PK) → finding, content hash, client hash, time |
+| `guard_hits`, `feed_labels`, `meta` | engine | `meta.schema_version = 3` |
+
+Migrations are additive and idempotent (`Repository._migrate`), so existing databases upgrade in
+place. Findings are never overwritten by investigations: each investigation inserts a new row.
+
+## 5. Environments
+
+There is one runtime mode: **live**. `APP_ENV` only changes hardening.
+
+| | dev | production |
+|---|---|---|
+| Data | live database only — no seed, no fixtures | same |
+| Search/Maps | live providers when configured; otherwise sweeps fail honestly | same |
+| Cookies | not Secure (plain HTTP on localhost) | Secure + HSTS |
+| API docs | on | off |

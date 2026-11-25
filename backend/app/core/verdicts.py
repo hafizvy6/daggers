@@ -10,8 +10,10 @@ MALICIOUS = "MALICIOUS"
 VERDICTS = (UNKNOWN, SUSPICIOUS, MISLEADING, MALICIOUS)
 RANK = {UNKNOWN: 0, SUSPICIOUS: 1, MISLEADING: 2, MALICIOUS: 3}
 
+# UNKNOWN means "no signals", not "authentic". SAFE is only ever produced by the
+# WS2 trust policy for an approved, fresh official domain (channels/trust_policy.py).
 UI_TAGS = {
-    UNKNOWN: "SAFE",
+    UNKNOWN: "WARNING",
     SUSPICIOUS: "WARNING",
     MISLEADING: "MISLEADING",
     MALICIOUS: "FAKE",
@@ -81,4 +83,4 @@ def policy(
 
 
 def ui_tag(verdict: str) -> str:
-    return UI_TAGS.get(verdict, "SAFE")
+    return UI_TAGS.get(verdict, "WARNING")

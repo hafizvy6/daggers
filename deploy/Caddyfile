@@ -1,0 +1,13 @@
+# Caddy terminates HTTPS (automatic Let's Encrypt certificates) and proxies to Daggers.
+# DAGGERS_DOMAIN must resolve to this server; ports 80 and 443 must be reachable.
+{$DAGGERS_DOMAIN} {
+	encode gzip
+	reverse_proxy app:8000 {
+		# Server-Sent Events (/api/stream, AI Analyst) must not be buffered.
+		flush_interval -1
+	}
+	log {
+		output stdout
+		format json
+	}
+}

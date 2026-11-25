@@ -1,4 +1,4 @@
-# Daggers · UI-KIT (read before you touch a pixel)
+# Daggers · UI-KIT (WS3 owns — read before you touch a pixel)
 
 The design system is **Neo-Outline Soft**: neo-brutalist skeleton (2px ink outlines, hard
 offset shadows, mono labels), softened into something a bank or the police can put in front of
@@ -74,7 +74,7 @@ Self-hosted `woff2` in `web/fonts/` — **no CDN, ever** (venue Wi-Fi cannot be 
 | `--fs-sm` 13px | secondary |
 | `--fs-xs` 12px | mono labels, chips |
 
-## 5. Bilingual rules (non-negotiable)
+## 5. Bilingual rules (non-negotiable — WS3 §6)
 
 1. `dir` + `lang` are set **once** on `<html>` by `setLang()`. Never per-component.
 2. Every visible string is `t("ns.key")` — `ops/check_i18n.py` fails the build otherwise.
@@ -97,7 +97,7 @@ keyboard walk Feed → Finding → Portal, `aria-live` on the view mount and toa
 
 ## 7. Data shapes the UI eats
 
-Optional additive fields the UI uses and tolerates the absence of: `brand`, `reasons_ar`,
-`verdict_note(_ar)`, `signals[]` (score breakdown), `maps_listing{name,phone,website}`,
-`age_min`/`cert_age_min`/`filed_age_min` (age labels derived from API timestamps).
-**Never** render a verdict the API didn't send.
+See `daggers-workstream-3-face.md` §3 (C1–C4). Optional additive fields the UI uses and
+tolerates the absence of: `brand`, `reasons_ar`, `verdict_note(_ar)`, `signals[]` (score
+breakdown), `maps_listing{name,phone,website}`, `age_min`/`cert_age_min`/`filed_age_min`
+(demo timestamp re-anchoring). **Never** render a verdict the API didn't send.

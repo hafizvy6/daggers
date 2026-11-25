@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import copy
 import re
-from collections.abc import Mapping
 from typing import Any
 
-from ..core.verdicts import MALICIOUS, MISLEADING, SUSPICIOUS
+from ..core.verdicts import MALICIOUS
 
 FINDING_KEYS = frozenset(
     {
@@ -87,7 +86,11 @@ def build_evidence(finding: dict) -> dict:
     missing = FINDING_KEYS - set(finding)
     if missing:
         raise ValueError(f"Finding is missing contract keys: {sorted(missing)}")
-    extra = set(finding) - FINDING_KEYS
+    # Known integration fields on a stored finding (tag, verification detail, timestamps,
+    # a Checker submission) are dropped — never copied into a report. Anything else is refused.
+    from ..db.repo import FINDING_DETAIL_KEYS
+
+    extra = set(finding) - FINDING_KEYS - set(FINDING_DETAIL_KEYS) - {"duplicate"}
     if extra:
         raise ValueError(f"Finding has non-contract keys: {sorted(extra)}")
     evidence = copy.deepcopy({key: finding[key] for key in FINDING_KEYS})
@@ -119,35 +122,5 @@ def build_report(
     return report
 
 
-ALERT_VERDICTS = {SUSPICIOUS, MISLEADING, MALICIOUS}
-
-
-def autofile_eligible(
-    finding: dict,
-    clone_min: float = 90.0,
-    confirmed_context: Mapping[str, object] | None = None,
-) -> bool:
-    """Auto-create a zero-PII portal dossier for every actionable finding.
-
-    This deliberately creates an internal queued police-portal report for
-    WARNING and above. It does not authorize sending weak or unconfirmed
-    reports to an external police intake (see external_submission_eligible).
-    """
-    return str(finding.get("verdict") or "").upper() in ALERT_VERDICTS
-
-
-def external_submission_eligible(
-    finding: dict,
-    clone_min: float = 90.0,
-    confirmed_context: Mapping[str, object] | None = None,
-) -> bool:
-    """Only strongly corroborated MALICIOUS dossiers may leave the portal."""
-    if str(finding.get("verdict") or "").upper() != MALICIOUS:
-        return False
-    if float(finding.get("clone") or 0) >= clone_min:
-        return True
-    context = confirmed_context or {}
-    if bool(context.get("phishtank_confirmed")):
-        return True
-    reasons = " ".join(str(reason).lower() for reason in (finding.get("reasons") or []))
-    return "phishing url feed" in reasons or "phishtank" in reasons
+def autofile_eligible(finding: dict, clone_min: float = 90.0) -> bool:
+    return finding.get("verdict") == MALICIOUS and float(finding.get("clone") or 0) >= clone_min

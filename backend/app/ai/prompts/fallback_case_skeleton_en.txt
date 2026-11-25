@@ -1,4 +1,7 @@
-This report covers {domain}, flagged {verdict} with a score of {score}. The site imitates {brand} and reproduces {gallery_match} at {clone}% visual match.
-The key evidence on file:
+FACTS: {domain} is tagged {tag_en} (engine score {score}). Domain authentication: {auth_en}.
+Key evidence on file:
 {reasons_en}
-It works by collecting what visitors enter and sending it to a host outside the domain. Recommended action: keep the domain blocked at the Guard, request registrar takedown, and notify brand protection. Priority: {priority}.
+Official verification: {verification_en}
+ASSESSMENT (template, no AI model used): {assessment_en}
+MISSING: {missing_en}
+NEXT STEPS: {next_en} Priority: {priority}.

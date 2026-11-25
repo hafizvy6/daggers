@@ -8,20 +8,23 @@ from urllib.parse import urlparse
 
 from . import claims as claim_engine
 from . import homograph
-from . import numbers
+from . import message as message_engine
 from . import verdicts
 from .verdicts import MALICIOUS, MISLEADING, SUSPICIOUS, UNKNOWN
 
-RISKY_TLDS = {
-    "top", "xyz", "icu", "click", "live", "cfd", "rest", "sbs", "shop", "online",
-    "site", "fun", "buzz", "work", "loan", "gq", "cf", "tk", "ml", "ga",
-}
+from .rules import rules as _rules, words_regex
+
+ENGINE_VERSION = "daggers-engine-3.1"
+
+RISKY_TLDS = frozenset(_rules()["risky_tlds"])   # data: core/rules.yaml
 CONFIRMATION_SIGNALS = frozenset(
     {
         "vision.clone_ge_90",
         "feeds.phishtank_confirmed",
         "content.form_action_mismatch",
         "content.payment_harvest_fields",
+        "content.gov_identity_credential_harvest",
+        "content.brand_identity_credential_form",
     }
 )
 HEX_RUN = re.compile(r"[a-f0-9]{12,}", re.I)
@@ -37,9 +40,13 @@ class Signal:
     name: str
     weight: float
     reason: str
+    group: str = ""          # evidence group: signals of one observation count once
 
     def as_dict(self) -> dict:
-        return {"name": self.name, "weight": self.weight, "reason": self.reason}
+        out = {"name": self.name, "weight": self.weight, "reason": self.reason}
+        if self.group:
+            out["group"] = self.group
+        return out
 
 
 @dataclass(frozen=True)
@@ -208,7 +215,12 @@ def _lexical_signals(
         signals.append(Signal("lexical.gibberish_run", 0.15, "12+ character hex/gibberish run in domain"))
     path_query = homograph.confusable_fold(f"{norm.path}?{norm.query}")
     for term in _flat_lures(lures):
-        if len(term) >= 3 and homograph.confusable_fold(term) in path_query:
+        # A lure word must START at a word boundary ('secure-login', '/verify', 'securelogin' match;
+        # 'unlimited' does not match the lure 'limited'). Short lures (< 5 letters) must also END at
+        # a boundary ('free-gift' matches, 'freedom' does not).
+        folded = homograph.confusable_fold(term)
+        tail = r"(?![a-z0-9])" if len(folded) < 5 else ""
+        if len(term) >= 3 and re.search(r"(?<![a-z0-9])" + re.escape(folded) + tail, path_query):
             signals.append(Signal("lexical.lure_keyword", 0.20, f"lure keyword '{term}' in URL path/query"))
             break
     # A legitimate fully non-Latin IDN is not a signal. Punycode counts only when
@@ -265,31 +277,17 @@ def _brand_candidates(
         official = str(brand.get("official_domain", "")).lower()
         official_label = official.split(".")[0]
         aliases = [str(alias).lower() for alias in brand.get("aliases", [])]
-        radar_terms = [str(term).lower() for term in brand.get("radar_terms", [])]
-        tokens = tuple(dict.fromkeys([canonical, *aliases, *radar_terms]))
+        tokens = tuple(dict.fromkeys([canonical, *aliases]))
         url_token = next(
             (token for token in tokens if len(token) >= 3 and _token_present(token, folded_url)),
             None,
-        )
-        generic_suffix = re.compile(
-            r"(?:account|alert|bank|banking|cards|help|home|login|mobile|online|pay|payment|portal|secure|service|support|web)$"
-        )
-        folded_labels = [homograph.confusable_fold(label) for label in labels]
-        compound_host = any(
-            len(homograph.confusable_fold(token)) >= 4
-            and any(
-                label == homograph.confusable_fold(token)
-                or (label.startswith(homograph.confusable_fold(token)) and generic_suffix.search(label[len(token):]))
-                for label in folded_labels
-            )
-            for token in tokens
         )
         exact_host = any(
             homograph.confusable_fold(segment) == homograph.confusable_fold(token)
             for segment in [*segments, *labels]
             for token in tokens
             if len(token) >= 3
-        ) or compound_host or any(
+        ) or any(
             homograph.confusable_fold(label) == homograph.confusable_fold(official_label)
             for label in labels
         )
@@ -320,6 +318,28 @@ def _brand_candidates(
     return candidates
 
 
+EMBED_MIN_LEN = 6
+
+
+def _embedded_brand(norm: NormalizedURL, brands: list[dict] | tuple[dict, ...]) -> tuple[str, str, str] | None:
+    """'abudhabi-police-fines.top' → 'abudhabipolice': a long brand name or official label
+    hidden inside a hyphenated / concatenated host label."""
+    labels = norm.unicode_host.split(".")[:-1] or norm.unicode_host.split(".")
+    joined = [re.sub(r"[^0-9a-z\u0600-\u06ff]+", "", homograph.confusable_fold(label)) for label in labels]
+    best: tuple[str, str, str] | None = None
+    for brand in brands:
+        official = str(brand.get("official_domain", "")).lower()
+        names = [str(brand.get("token", "")), official.split(".")[0], *[str(a) for a in brand.get("aliases", [])]]
+        for name in names:
+            folded = re.sub(r"[^0-9a-z\u0600-\u06ff]+", "", homograph.confusable_fold(name.lower()))
+            if len(folded) < EMBED_MIN_LEN:
+                continue
+            if any(folded in label and folded != label for label in joined):
+                if best is None or len(folded) > len(best[0]):
+                    best = (folded, official, str(brand.get("sector") or ""))
+    return best
+
+
 def _identity_signals(
     norm: NormalizedURL,
     raw: str,
@@ -339,9 +359,29 @@ def _identity_signals(
                 f"brand typo/name '{chosen['token']}' (distance 0) outside {chosen['official']}",
             )
         ]
-        # Do not also emit brand_in_url here: it would double-count the same
-        # host token and push brand-only bait sites past MALICIOUS without proof.
+        url_token = chosen["url_token"] or chosen["token"]
+        signals.append(
+            Signal(
+                "identity.brand_in_url",
+                0.25,
+                f"brand name '{url_token}' appears outside its official domain",
+            )
+        )
         return signals, True
+
+    embedded = _embedded_brand(norm, brands)
+    if embedded is not None:
+        token, official, sector = embedded
+        # A GOVERNMENT authority's name inside an unrelated domain is impersonation on its own;
+        # a company name can legitimately appear in partners' domains, so it weighs less.
+        weight = 0.65 if sector == "government" else 0.50
+        return [
+            Signal(
+                "identity.brand_embedded",
+                weight,
+                f"domain embeds the name '{token}' of {official} but is not {official}",
+            )
+        ], True
 
     typos = [item for item in candidates if item["distance"] <= 2]
     mentions = [item for item in candidates if item["url_token"]]
@@ -366,7 +406,7 @@ def _identity_signals(
                 )
             )
         brand_hit = True
-    elif mentions:
+    if mentions:
         chosen = max(mentions, key=lambda item: len(item["url_token"] or ""))
         signals.append(
             Signal(
@@ -378,10 +418,68 @@ def _identity_signals(
     return signals, brand_hit
 
 
+NEW_DOMAIN_DAYS = 30
+# A company's NAME appearing in another domain (noon-chi.com, fab-garden.com) is a reason for caution,
+# not proof of fraud: when it is the ONLY evidence, the verdict is capped at SUSPICIOUS (→ WARNING).
+# Not capped: government names, look-alike letters, lure words, risky TLDs, '@' tricks, page/feed/
+# message evidence, deceptive sub-domains — any of those alongside the name keeps the full verdict.
+NAME_ONLY_SIGNALS = frozenset({"identity.brand_typo_d1", "identity.brand_typo_d2", "identity.brand_in_url",
+                               "identity.brand_embedded"})
+
+
+def host_has_lure(host: str, lures) -> bool:
+    """A lure word as its own segment of the host name ('noon-login-verify.com' → login, verify)."""
+    segments = {seg for seg in re.split(r"[^0-9a-z\u0600-\u06ff]+", homograph.confusable_fold(host)) if seg}
+    return any(term in segments for term in _flat_lures(lures) if len(term) >= 3)
+
+
+def name_only_cap(signals: list[Signal], gov_domains: tuple[str, ...], host_lure: bool = False) -> bool:
+    active = [s for s in signals if s.weight > 0]
+    if host_lure or not active or any(s.name not in NAME_ONLY_SIGNALS for s in active):
+        return False
+    return not any(d and d in s.reason for s in active for d in gov_domains)
+# Legacy context flags (radar) are separate observations and keep their own weights; only the feed
+# listing is grouped (the intel layer may report the same listing again).
+CONTEXT_GROUPS = {"feeds.phishtank_confirmed": "feeds"}
+
+
+def dedupe_groups(signals: list[Signal]) -> list[Signal]:
+    """Signals derived from the SAME observation (one form, one feed listing, one host string)
+    are not independent confirmation: in each group only the strongest keeps its weight; the
+    others stay visible with weight 0 ("counted once")."""
+    best: dict[str, Signal] = {}
+    for sig in signals:
+        if sig.group and (sig.group not in best or sig.weight > best[sig.group].weight):
+            best[sig.group] = sig
+    out: list[Signal] = []
+    seen: set[str] = set()
+    for sig in signals:
+        if sig.group and best[sig.group] is not sig:
+            out.append(Signal(sig.name, 0.0, f"{sig.reason} (same observation as {best[sig.group].name}; counted once)",
+                              sig.group))
+        elif sig.name not in seen:
+            out.append(sig)
+        seen.add(sig.name)
+    return out
+
+
+def age_signal(context: Mapping[str, object], other: list[Signal]) -> list[Signal]:
+    """Recently registered domain: a WEAK signal that counts only next to independent evidence.
+    An old domain adds nothing (it never earns SAFE and never cancels a fraud signal)."""
+    age = context.get("domain_age_days")
+    if not isinstance(age, int) or age >= NEW_DOMAIN_DAYS:
+        return []
+    if not any(s.weight > 0 for s in other):
+        return []
+    return [Signal("infra.domain_recently_registered", 0.15,
+                   f"domain registered {age} day(s) ago (RDAP) — weak signal, counted only with other evidence",
+                   "domain_age")]
+
+
 def _context_signals(context: Mapping[str, object], brand_hit: bool) -> list[Signal]:
     signals: list[Signal] = []
     if context.get("phishtank_confirmed"):
-        signals.append(Signal("feeds.phishtank_confirmed", 0.70, "confirmed in a phishing URL feed"))
+        signals.append(Signal("feeds.phishtank_confirmed", 0.70, "confirmed in a phishing URL feed", "feeds"))
     cert_age = context.get("cert_age_hours")
     if isinstance(cert_age, (int, float)) and cert_age < 24:
         signals.append(Signal("infra.cert_age_lt_24h", 0.25, "TLS certificate issued less than 24h ago"))
@@ -395,6 +493,11 @@ def _context_signals(context: Mapping[str, object], brand_hit: bool) -> list[Sig
         signals.append(Signal("content.payment_harvest_fields", 0.25, "payment-harvest fields (iban, cvv, otp)"))
     if context.get("obfuscated_script"):
         signals.append(Signal("content.obfuscated_script", 0.15, "obfuscated script"))
+    for item in context.get("extra_signals") or ():      # intel layer: page, feeds, host identity
+        if isinstance(item, Mapping) and item.get("name"):
+            signals.append(Signal(str(item["name"]), float(item.get("weight") or 0.0), str(item.get("reason") or ""),
+                                  str(item.get("group") or "")))
+    signals = [Signal(s.name, s.weight, s.reason, s.group or CONTEXT_GROUPS.get(s.name, "")) for s in signals]
     return signals
 
 
@@ -443,13 +546,29 @@ def score_url(
     audit = homograph.audit(norm.unicode_host, official_domains, norm.registrable_domain)
     is_official = any(homograph.is_official_host(norm.unicode_host, domain) for domain in official_domains)
     if is_official:
+        # The NAME is genuine, so name/claim heuristics do not apply — but evidence about the
+        # SITE itself (threat feeds, phishing forms, scripts, certificates) still counts:
+        # a catalogued domain can be compromised.
+        site = dedupe_groups(_context_signals(context, False))
+        if not any(s.weight > 0 for s in site):
+            return ScoreResult(
+                score=0.0,
+                verdict=UNKNOWN,
+                reasons=["matches official domain allowlist"],
+                normalized=norm.as_dict(),
+                homograph=audit.as_dict(),
+                scam_type=None,
+            )
+        total = verdicts.clamp(sum(signal.weight for signal in site))
         return ScoreResult(
-            score=0.0,
-            verdict=UNKNOWN,
-            reasons=["matches official domain allowlist"],
+            score=total,
+            verdict=verdicts.decide(total, thresholds=thresholds),
+            reasons=["matches official domain allowlist", *[s.reason for s in site]],
+            signals=[signal.as_dict() for signal in site],
+            l1_detail={signal.name: signal.weight for signal in site},
             normalized=norm.as_dict(),
             homograph=audit.as_dict(),
-            scam_type=None,
+            scam_type="known-phishing-url" if any(s.name == "feeds.phishtank_confirmed" for s in site) else None,
         )
 
     signals = _lexical_signals(norm, raw_url, lures, audit)
@@ -469,6 +588,8 @@ def score_url(
         signals.append(Signal(claim.name, claim.weight, claim.reason))
 
     signals.extend(_context_signals(context, brand_hit))
+    signals = dedupe_groups(signals)
+    signals.extend(age_signal(context, signals))
     total = verdicts.clamp(sum(signal.weight for signal in signals))
     has_confirmation = any(signal.name in CONFIRMATION_SIGNALS for signal in signals)
     claim_only_cap = verdicts.MISLEADING if claim_hit and not has_confirmation else None
@@ -478,6 +599,9 @@ def score_url(
         cap=claim_only_cap,
         thresholds=thresholds,
     )
+    gov_domains = tuple(str(b["official_domain"]).lower() for b in brands if b.get("sector") == "government")
+    if name_only_cap(signals, gov_domains, host_has_lure(norm.unicode_host, lures)) and verdicts.RANK[verdict] > verdicts.RANK[verdicts.SUSPICIOUS]:
+        verdict = verdicts.SUSPICIOUS
     reasons = list(dict.fromkeys(signal.reason for signal in signals if signal.weight > 0))
     if not reasons:
         reasons.append("no signs found in the offline rules")
@@ -534,6 +658,111 @@ def extract_urls(text: str) -> list[str]:
     return found[:5]
 
 
+SIGNAL_CATEGORIES = (
+    ("content.gov_identity_credential_harvest", "government_impersonation"),
+    ("content.claims_government_identity", "government_impersonation"),
+    ("lexical.lure_keyword", "phishing"),
+    ("lexical.", "suspicious_url"),
+    ("identity.", "brand_impersonation"),
+    ("homograph.", "homograph"),
+    ("claims.", "fraudulent_offer"),
+    ("feeds.", "known_phishing"),
+    ("infra.", "suspicious_infrastructure"),
+    ("vision.", "brand_impersonation"),
+    ("content.", "phishing"),
+)
+MESSAGE_CONFIRMATION = frozenset({
+    "message.credential_request",
+    "message.impersonation_government",
+    "message.impersonation_brand",
+    "message.payment_demand",
+})
+
+
+def _category(name: str) -> str:
+    return next((label for prefix, label in SIGNAL_CATEGORIES if name.startswith(prefix)), "other")
+
+
+def _government_domains(brands: list[dict] | tuple[dict, ...]) -> tuple[str, ...]:
+    return tuple(str(b["official_domain"]).lower() for b in brands if b.get("sector") == "government")
+
+
+def annotate_url_signals(
+    result: ScoreResult,
+    *,
+    brands: list[dict] | tuple[dict, ...],
+    text: str | None = None,
+) -> list[dict]:
+    """Add category / part / excerpt to every URL signal: which part of the input triggered it."""
+    norm = result.normalized or {}
+    host = str(norm.get("unicode_host") or norm.get("host") or "")
+    gov_domains = _government_domains(brands)
+    out: list[dict] = []
+    for signal in result.signals:
+        item = dict(signal)
+        name = str(item.get("name", ""))
+        category = _category(name)
+        part, excerpt = "domain", host
+        if name == "lexical.risky_tld":
+            excerpt = "." + str(norm.get("tld") or "")
+        elif name == "lexical.path_depth":
+            part, excerpt = "path", str(norm.get("path") or "")
+        elif name == "lexical.lure_keyword":
+            match = re.search(r"'([^']+)'", str(item.get("reason", "")))
+            part, excerpt = "path", (match.group(1) if match else str(norm.get("path") or ""))
+        elif name.startswith("identity.") and (any(d in str(item.get("reason", "")) for d in gov_domains)
+                                               or ", government)" in str(item.get("reason", ""))):
+            category = "government_impersonation"
+        elif name.startswith("claims."):
+            part, excerpt = ("message", _claim_excerpt(text)) if text else ("url", str(norm.get("raw") or host))
+        elif name.startswith(("feeds.", "infra.", "vision.", "content.")):
+            part = "site"
+        item.update({"category": category, "part": part, "excerpt": excerpt})
+        out.append(item)
+    return out
+
+
+def _claim_excerpt(text: str | None) -> str:
+    for _label, pattern in claim_engine.OFFER_PATTERNS:
+        match = pattern.search(text or "")
+        if match:
+            start, end = max(0, match.start() - 30), min(len(text or ""), match.end() + 30)
+            return re.sub(r"\s+", " ", (text or "")[start:end]).strip()
+    return ""
+
+
+OFFER_LABELS = frozenset(label for label, _ in claim_engine.OFFER_PATTERNS)
+GIVEAWAY_WORDS = words_regex(_rules()["giveaway_words"]["en"], _rules()["giveaway_words"]["ar"])  # core/rules.yaml
+
+
+def _without_claim(result: ScoreResult, thresholds: Mapping[str, float] | None) -> ScoreResult:
+    kept = [s for s in result.signals if not str(s.get("name", "")).startswith("claims.")]
+    score = verdicts.clamp(sum(float(s.get("weight") or 0) for s in kept))
+    return ScoreResult(
+        score=score,
+        verdict=verdicts.decide(score, thresholds=thresholds),
+        reasons=[str(s["reason"]) for s in kept] or ["no scam indicators found by the rules"],
+        signals=kept,
+        l1_detail={str(s["name"]): float(s["weight"]) for s in kept},
+        normalized=result.normalized,
+        homograph=result.homograph,
+        brand_hit=result.brand_hit,
+        claim_hit=False,
+        scam_type=None,
+    )
+
+
+def _url_summary(result: ScoreResult, candidate: str) -> dict:
+    norm = result.normalized or {}
+    return {
+        "url": candidate,
+        "host": norm.get("unicode_host") or norm.get("host"),
+        "registrable_domain": norm.get("registrable_domain"),
+        "score": result.score,
+        "verdict": result.verdict,
+    }
+
+
 def score_request(
     kind: str,
     input_value: str,
@@ -545,49 +774,98 @@ def score_request(
     context: Mapping[str, object] | None = None,
     thresholds: Mapping[str, float] | None = None,
     evidence_lookup: Callable[[str], str | None] | None = None,
+    context_for: Callable[[str], Mapping[str, object]] | None = None,
 ) -> dict:
-    """Build the exact C2 ScanResult. No caller input is persisted by this function."""
-    if kind not in {"url", "text", "number"}:
-        raise ValueError("kind must be url, text, or number")
+    """Build the ScanResult. No caller input is persisted by this function.
+
+    ``url``: the URL/domain is scored. ``text``: every link in the message is scored
+    (the riskiest one drives the result), the message content is analysed
+    (``core.message``), and both are combined. Phone-number checking is not part of
+    this engine.
+    """
+    if kind not in {"url", "text"}:
+        raise ValueError("kind must be url or text")
     if lang not in {"en", "ar"}:
         raise ValueError("lang must be en or ar")
 
     evidence_url: str | None = None
-    if kind == "number":
-        result = numbers.check_number(input_value).as_scan_fragment()
-        verdict = str(result["verdict"])
-        score = float(result["score"])
-        reasons = list(result["reasons"])
-        scam_type = result["scam_type"]
+    text = input_value if kind == "text" else None
+    candidates = [input_value.strip()] if kind == "url" else extract_urls(input_value)
+    best: ScoreResult | None = None
+    best_candidate: str | None = None
+    url_results: list[dict] = []
+    for candidate in candidates:
+        candidate_result = score_url(
+            candidate,
+            brands=brands,
+            lures=lures,
+            context={**(context or {}), **(context_for(candidate) if context_for else {})},
+            suffix_resolver=suffix_resolver,
+            text=text,
+            thresholds=thresholds,
+        )
+        url_results.append(_url_summary(candidate_result, candidate))
+        if best is None or candidate_result.score > best.score:
+            best, best_candidate = candidate_result, candidate
+
+    signals: list[dict] = []
+    if best is not None:
+        signals.extend(annotate_url_signals(best, brands=brands, text=text))
+        base = best
     else:
-        candidates = [input_value] if kind == "url" else extract_urls(input_value)
-        best: ScoreResult | None = None
-        best_norm: NormalizedURL | None = None
-        for candidate in candidates:
-            candidate_result = score_url(
-                candidate,
-                brands=brands,
-                lures=lures,
-                context=context,
-                suffix_resolver=suffix_resolver,
-                text=input_value if kind == "text" else None,
-                thresholds=thresholds,
-            )
-            if best is None or candidate_result.score > best.score:
-                best = candidate_result
-                best_norm = normalize_url(candidate, suffix_resolver)
-        if best is None:
-            best = _score_claim_only(input_value, brands, thresholds)
-        if best_norm and evidence_lookup:
-            lookup_key = best_norm.registrable_domain or best_norm.unicode_host
-            try:
-                evidence_url = evidence_lookup(lookup_key)
-            except Exception:
-                evidence_url = None
-        verdict = best.verdict
-        score = best.score
-        reasons = list(best.reasons)
-        scam_type = best.scam_type
+        base = _score_claim_only(input_value, brands, thresholds)
+        signals.extend(annotate_url_signals(base, brands=brands, text=text))
+
+    msg_signals = message_engine.analyze_message(input_value, candidates, brands) if kind == "text" else []
+    claim_hit = base.claim_hit
+    if msg_signals and claim_hit and any(sig.name == "message.payment_demand" for sig in msg_signals):
+        # A bare "AED amount + organisation" match is a fee/fine DEMAND, not a prize offer:
+        # report it once, as a payment demand, instead of as a giveaway claim.
+        official = tuple(str(b["official_domain"]).lower() for b in brands)
+        claim = claim_engine.evaluate_claims(input_value, "", list(brands), official)
+        offer_labels = {p for p in (claim.matched_patterns if claim else ()) if p in OFFER_LABELS}
+        if offer_labels <= {"amount", "arabic_offer"} and not GIVEAWAY_WORDS.search(input_value):
+            claim_hit = False
+            base = _without_claim(base, thresholds)
+            signals = [s for s in signals if not str(s.get("name", "")).startswith("claims.")]
+    signals.extend(sig.as_dict() for sig in msg_signals)
+
+    if msg_signals:
+        names = {str(s.get("name")) for s in signals}
+        total = verdicts.clamp(base.score + sum(sig.weight for sig in msg_signals))
+        confirmed = bool(names & (CONFIRMATION_SIGNALS | MESSAGE_CONFIRMATION))
+        cap = None
+        if claim_hit and not confirmed:
+            cap = MISLEADING
+        if not message_engine.has_action_channel(msg_signals, candidates) and not (names & CONFIRMATION_SIGNALS):
+            cap = MISLEADING if claim_hit else SUSPICIOUS
+        verdict = verdicts.decide(total, forced_min=MISLEADING if claim_hit else None, cap=cap,
+                                  thresholds=thresholds)
+        score = total
+    else:
+        verdict, score = base.verdict, base.score
+
+    reasons = list(dict.fromkeys(str(s["reason"]) for s in signals if float(s.get("weight") or 0) > 0))
+    if not reasons:
+        reasons = list(base.reasons) or ["no scam indicators found by the rules"]
+    scam_type = base.scam_type if (claim_hit or not base.claim_hit) else None
+    if not scam_type and msg_signals:
+        names = {s.name for s in msg_signals}
+        if "message.credential_request" in names:
+            scam_type = "credential-phishing-message"
+        elif "message.delivery_lure" in names and "message.payment_demand" in names:
+            scam_type = "fake-delivery-fee"
+        elif names & {"message.impersonation_government", "message.impersonation_brand"}:
+            scam_type = "impersonation-message"
+        elif "message.payment_demand" in names:
+            scam_type = "payment-demand-message"
+
+    if best is not None and evidence_lookup:
+        lookup_key = best.normalized.get("registrable_domain") or best.normalized.get("unicode_host")
+        try:
+            evidence_url = evidence_lookup(lookup_key) if lookup_key else None
+        except Exception:
+            evidence_url = None
 
     return {
         "kind": kind,
@@ -598,8 +876,13 @@ def score_request(
         "evidence_url": evidence_url,
         "scam_type": scam_type,
         "offline_capable": True,
+        "signals": signals,
+        "analyzed_url": best_candidate,
+        "normalized": dict(best.normalized) if best is not None else None,
+        "homograph": dict(best.homograph) if best is not None else None,
+        "urls": url_results,
     }
 
 
-# Explicit public aliases for channel adapters importing the brain in-process.
+# Explicit public aliases for other workstreams importing the brain in-process.
 scan = score_request

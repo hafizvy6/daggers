@@ -1,4 +1,4 @@
-"""AI Analyst tests — the rules that must never break.
+"""WS3 · AI Analyst tests — the rules that must never break.
 
 1. input is Report.evidence only (privacy filter drops anything else)
 2. AI never writes verdict / score / reasons (template + prompt contract)
@@ -6,8 +6,8 @@
 4. a stream that fails mid-way still ends with a final event (fallback:true)
 5. bilingual output always carries both keys
 """
-import asyncio
-import json
+import asyncio, json, sys, pathlib
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[3]))
 
 import pytest
 from backend.app.ai import client, fallback
@@ -47,9 +47,19 @@ def test_template_never_invents_verdict_and_is_bilingual():
 
 def test_suspicious_never_reads_as_fake():
     out = fallback.case_summary({**EVIDENCE, "verdict": "SUSPICIOUS", "scam_type": "brand-impersonation", "clone": 40})
-    assert "suspicious" in out["summary_en"].lower()
-    assert "مشبوه" in out["summary_ar"]
+    assert "warning" in out["summary_en"].lower()
+    assert "تحذير" in out["summary_ar"]
     assert "fake" not in out["summary_en"].lower()
+
+
+def test_template_uses_central_tag_and_reports_missing_sources():
+    ev = {**EVIDENCE, "tag": "MISLEADING", "verdict": "UNKNOWN",
+          "official_verification": {"status": "SOURCE_UNAVAILABLE", "unchecked_sources": ["icp"], "sources": []}}
+    out = fallback.case_summary(ev)
+    assert "MISLEADING" in out["summary_en"]
+    assert "SOURCE_UNAVAILABLE" in out["summary_en"]
+    assert "not checked: icp" in out["summary_en"]
+    assert "not found on official channels" not in out["summary_en"]
 
 
 def test_priority_rule():

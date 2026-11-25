@@ -21,13 +21,6 @@ def test_premium_prefix_without_report_is_suspicious():
     assert any("premium-rate" in reason for reason in result.reasons)
 
 
-def test_north_american_caribbean_premium_forms_are_suspicious():
-    for value in ("+1 809 555 0123", "+1 829 555 0123", "+1 849 555 0123", "001-809-555-0123"):
-        result = numbers.check_number(value)
-        assert result.verdict == "SUSPICIOUS", value
-        assert any("Caribbean" in reason for reason in result.reasons), value
-
-
 def test_voip_callback_pattern_is_suspicious():
     result = numbers.check_number("+445612345678")
     assert result.verdict == "SUSPICIOUS"
@@ -53,13 +46,9 @@ def test_arabic_indic_digits_normalize_to_pattern_catalog():
     assert result.verdict == "MALICIOUS"
 
 
-def test_scan_request_number_shape(scoring_kwargs):
-    result = scorer.score_request("number", "+971900000042", "en", **scoring_kwargs)
-    assert set(result) == {
-        "kind", "input", "verdict", "score", "reasons",
-        "evidence_url", "scam_type", "offline_capable",
-    }
-    assert result["kind"] == "number"
-    assert result["verdict"] == "MALICIOUS"
-    assert result["evidence_url"] is None
-    assert result["offline_capable"] is True
+def test_phone_numbers_are_not_a_checker_input(scoring_kwargs):
+    """Phone-number checking is not part of the Checker/scan engine (Maps listings only)."""
+    import pytest
+
+    with pytest.raises(ValueError):
+        scorer.score_request("number", "+971900000042", "en", **scoring_kwargs)

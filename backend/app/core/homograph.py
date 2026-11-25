@@ -3,6 +3,8 @@ from __future__ import annotations
 import unicodedata
 from dataclasses import dataclass
 
+from .rules import rules as _rules
+
 MIXABLE_SCRIPTS = {"CYRILLIC", "GREEK", "ARMENIAN", "GEORGIAN"}
 KNOWN_SCRIPTS = (
     "LATIN",
@@ -19,56 +21,10 @@ KNOWN_SCRIPTS = (
 )
 
 # Characters that visually impersonate Latin letters. Keys are NFKC + casefold forms.
-CONFUSABLES = {
-    "а": "a",  # Cyrillic a
-    "е": "e",
-    "о": "o",
-    "р": "p",
-    "с": "c",
-    "у": "y",
-    "х": "x",
-    "і": "i",
-    "ѕ": "s",
-    "ԁ": "d",
-    "ց": "g",
-    "һ": "h",
-    "і": "i",
-    "ј": "j",
-    "ԛ": "q",
-    "т": "t",
-    "ν": "v",
-    "ο": "o",  # Greek omicron
-    "α": "a",
-    "ρ": "p",
-    "τ": "t",
-    "ε": "e",
-    "χ": "x",
-    "κ": "k",
-    "μ": "m",
-    "β": "b",
-    "ι": "i",
-    "η": "n",
-    "υ": "u",
-    "ζ": "z",
-    "ı": "i",  # dotless i
-    "ſ": "s",  # long s
-    "ƒ": "f",
-    "ℓ": "l",
-    "ɑ": "a",
-    "ɡ": "g",
-    "ϲ": "c",
-    "ө": "o",
-    "ө": "o",
-}
+CONFUSABLES = dict(_rules()["confusables"])   # data: core/rules.yaml
 
-MULTI_SUFFIXES = {
-    "co.ae", "com.ae", "net.ae", "org.ae", "gov.ae", "ac.ae", "sch.ae",
-    "co.uk", "org.uk", "gov.uk", "ac.uk", "com.au", "net.au", "co.nz",
-    "com.sa", "com.qa", "com.kw", "com.bh", "com.om", "com.eg", "com.jo",
-    "com.tr", "com.br", "com.mx", "com.sg", "com.my", "com.ph", "com.pk",
-    "com.hk", "com.cn", "com.tw", "co.jp", "co.kr", "co.in", "co.id",
-    "co.th", "co.za", "com.ua", "com.ru", "com.pl", "com.es", "com.pt",
-}
+# Fallback only (the Public Suffix List is used first) — data: core/rules.yaml
+MULTI_SUFFIXES = frozenset(_rules()["fallback_multi_suffixes"])
 
 
 def _decode_label(label: str) -> str:
@@ -120,11 +76,9 @@ def host_forms(host: str) -> dict[str, object]:
 
 
 def confusable_fold(text: str) -> str:
-    normalized = unicodedata.normalize("NFKD", text or "").casefold()
+    normalized = unicodedata.normalize("NFKC", text or "").casefold()
     folded_chars: list[str] = []
     for char in normalized:
-        if unicodedata.combining(char):
-            continue
         folded_chars.append(CONFUSABLES.get(char, char))
     return "".join(folded_chars)
 
@@ -225,7 +179,9 @@ def audit(
             break
 
     spoofed_domain: str | None = None
-    for official in official_domains:
+    # A host that IS one of the official domains (a brand may own several) is never a spoof.
+    genuine = any(is_official_host(unicode_host, str(o).lower()) for o in official_domains)
+    for official in (() if genuine else official_domains):
         official = str(official).lower()
         if is_official_host(unicode_host, official):
             continue
@@ -233,27 +189,13 @@ def audit(
         official_label = official_unicode.split(".")[0]
         folded_official = confusable_fold(official_unicode)
         folded_registrable = confusable_fold(registrable)
-        # An exact ASCII official label on another registry (dewa.co.jp) is
-        # brand misuse, not a homograph. Only a visibly transformed label —
-        # diacritics, non-Latin alphabet confusables — counts as spoofing.
         label_match = len(official_label) >= 3 and any(
-            confusable_fold(label) == confusable_fold(official_label)
-            and label != official_label
-            for label in labels
+            confusable_fold(label) == confusable_fold(official_label) for label in labels
         )
         if folded_registrable == folded_official or confusable_fold(unicode_host) == folded_official or label_match:
-            # If the raw Unicode registrable/host is byte-for-byte different
-            # but folds to the official name, this is a confusable spoof.
-            if (
-                folded_registrable == folded_official
-                and registrable != official_unicode
-            ) or (
-                confusable_fold(unicode_host) == folded_official
-                and unicode_host != official_unicode
-            ) or label_match:
-                spoofed_domain = official
-                reasons.append(f"confusable spoof of {official} (look-alike letters from another alphabet)")
-                break
+            spoofed_domain = official
+            reasons.append(f"confusable spoof of {official} (look-alike letters from another alphabet)")
+            break
 
     return HomographResult(
         unicode_host=unicode_host,

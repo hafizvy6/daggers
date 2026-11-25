@@ -1,7 +1,7 @@
 """Sweep service: run default (or opted-in arbitrary) queries over web/maps channels.
 
 Abuse protections:
-  * canonical queries from ``queries.yaml``; free text allowed by default (set SWEEP_ALLOW_ARBITRARY=0 to disable)
+  * default queries only, from ``queries.yaml``; arbitrary text requires SWEEP_ALLOW_ARBITRARY=1
   * arbitrary queries are length-capped and refused if they contain personal data
   * per-client sliding-window rate limit + global concurrency cap
   * result titles/snippets are PII-redacted before storage
@@ -89,7 +89,9 @@ class SweepService:
         allow_arbitrary: bool | None = None,
         limiter: RateLimiter | None = None,
         publish: Callable[[str, dict], None] | None = None,
+        finding_sink: Callable[[dict, str], int | None] | None = None,
     ) -> None:
+        self.finding_sink = finding_sink
         self.search = search_channel
         self.maps = maps_channel
         self.store = store or make_store()
@@ -142,58 +144,97 @@ class SweepService:
 
     def run(self, *, channel: str, lang: str = "en", query_id: str | None = None,
             query: str | None = None, client: str = "unknown") -> dict:
+        """Synchronous sweep (tests, CLI). Same code path as the background job."""
+        return self.start(channel=channel, lang=lang, query_id=query_id, query=query, client=client,
+                          background=False)
+
+    def start(self, *, channel: str, lang: str = "en", query_id: str | None = None,
+              query: str | None = None, client: str = "unknown", background: bool = True) -> dict:
+        """Validate, create a persisted run (status=running), execute (optionally in a thread)."""
         spec = self.resolve(channel, query_id, query, lang)
         self.limiter.check(client)
         slots = self.limiter.slot()
-        try:
-            if channel == "web":
-                run = self.search.run(spec["query"], spec["lang"])
-                engine, cached, kind, errors = run.engine, run.cached, run.source_kind, run.errors
-                rows = [self._web_row(r) for r in run.results]
-            else:
-                result = self.maps.run(spec["query"], spec["lang"])
-                engine, cached, kind, errors = result["engine"], result["cached"], result["source_kind"], result["errors"]
-                rows = [self._maps_row(i, item) for i, item in enumerate(result["listings"], 1)]
-        finally:
-            slots.release()
-        meta = self.store.create_run(query=spec["query"], lang=spec["lang"], channel=channel, engine=engine, cached=cached)
-        self.store.add_results(meta["id"], rows)
-        response = self._response(meta, rows, kind, errors, spec.get("id"))
-        if self.publish:
+        meta = self.store.create_run(query=spec["query"], lang=spec["lang"], channel=channel,
+                                     engine="pending", cached=False, query_id=spec.get("id"))
+        self.store.update_run(meta["id"], status="running", stage="fetching")
+
+        def work() -> None:
             try:
-                self.publish("sweep", {k: response[k] for k in ("id", "channel", "query_id", "source_kind", "counts", "created_at")})
-            except Exception:  # SSE is best-effort; never fail the sweep
-                pass
-        return response
+                self._execute(meta["id"], channel, spec)
+            except SweepError as exc:
+                self.store.update_run(meta["id"], status="failed", stage="failed", error=str(exc))
+            except Exception as exc:  # never leave a run stuck in "running"
+                self.store.update_run(meta["id"], status="failed", stage="failed",
+                                      error=f"internal error ({type(exc).__name__})")
+            finally:
+                slots.release()
+                if self.publish:
+                    try:
+                        done = self.get(meta["id"]) or {}
+                        self.publish("sweep", {k: done.get(k) for k in (
+                            "id", "channel", "query_id", "status", "source_kind", "counts", "created_at")})
+                    except Exception:  # SSE is best-effort
+                        pass
+
+        if background:
+            threading.Thread(target=work, name=f"sweep-{meta['id']}", daemon=True).start()
+        else:
+            work()
+        return self.get(meta["id"]) or meta
+
+    def _execute(self, run_id: int, channel: str, spec: dict) -> None:
+        if channel == "web":
+            run = self.search.run(spec["query"], spec["lang"])
+            engine, cached, kind, errors = run.engine, run.cached, run.source_kind, run.errors
+            raw_rows = [self._web_row(r) for r in run.results]
+        else:
+            result = self.maps.run(spec["query"], spec["lang"])
+            engine, cached, kind, errors = result["engine"], result["cached"], result["source_kind"], result["errors"]
+            raw_rows = [self._maps_row(i, item) for i, item in enumerate(result["listings"], 1)]
+        if engine == "none":
+            raise SweepError(503, "no search/maps provider is configured or reachable: " + "; ".join(errors or ["none"]))
+        self.store.update_run(run_id, stage="scoring", engine=engine, cached=cached, source_kind=kind, errors=errors)
+        rows = []
+        for row in raw_rows:
+            if self.finding_sink and kind != "fixture":
+                try:
+                    row["finding_id"] = self.finding_sink(row, channel)
+                except Exception:  # persistence of the derived finding must not lose the sweep
+                    row["finding_id"] = None
+            rows.append(row)
+        self.store.add_results(run_id, rows)
+        self.store.update_run(run_id, status="completed", stage="done", counts=_counts([r["tag"] for r in rows]))
+
+    def list_runs(self, limit: int = 50) -> list[dict]:
+        return self.store.list_runs(limit)
 
     def get(self, run_id: int) -> dict | None:
         run = self.store.get_run(run_id)
         if run is None:
             return None
         rows = run.pop("results", [])
-        if rows:
-            kind = rows[0]["source_kind"]
-        elif run.get("engine") == "none":
-            kind = "unconfigured"
-        else:
-            kind = "unavailable"
-        return self._response(run, rows, kind, [], run.get("query_id"))
+        return self._response(run, rows)
 
-    def _response(self, meta: dict, rows: list[dict], kind: str, errors: list[str], query_id) -> dict:
+    def _response(self, meta: dict, rows: list[dict]) -> dict:
+        kind = meta.get("source_kind") or (rows[0]["source_kind"] if rows else None)
         return {
             "id": meta["id"],
             "query": meta["query"],
-            "query_id": query_id,
+            "query_id": meta.get("query_id"),
             "lang": meta["lang"],
             "channel": meta["channel"],
             "engine": meta["engine"],
             "cached": bool(meta["cached"]),
+            "status": meta.get("status") or "completed",
+            "stage": meta.get("stage"),
+            "error": meta.get("error"),
             "source_kind": kind,
-            "synthetic": False,
+            "synthetic": kind == "fixture",
             "created_at": meta["created_at"],
+            "finished_at": meta.get("finished_at"),
             "store": self.store.backend,
             "counts": _counts([r["tag"] for r in rows]),
-            "errors": errors,
+            "errors": meta.get("errors") or [],
             "results": rows,
         }
 
@@ -224,6 +265,6 @@ class SweepService:
             "domain_auth": website.get("domain_auth"), "gov_verification": None,
             "trust_reasons": list(website.get("trust_reasons") or []),
             "blockable": item["blockable"],
-            "source_kind": listing.get("source_kind") or "live",
+            "source_kind": "fixture" if listing["is_synthetic"] else "live",
             "maps": {"listing": listing, "checks": checks},
         }

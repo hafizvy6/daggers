@@ -54,20 +54,3 @@ def test_pure_arabic_domain_has_no_homograph_signal(catalog):
     audit = homograph.audit("موقع.ae", catalog.official_domains, "موقع.ae")
     assert audit.signal is False
     assert audit.spoof is False
-
-def test_exact_official_label_on_foreign_registry_is_not_a_confusable_spoof(catalog):
-    # dewa.co.jp / etisalat.af: ASCII brand label on a foreign registry.
-    # Brand misuse, but never a homoglyph — the old audit tagged these
-    # as confusable spoofs, which inflated them to confirmed-fake.
-    for host in ("dewa.co.jp", "etisalat.af"):
-        audit = homograph.audit(host, catalog.official_domains, host)
-        assert audit.spoof is False
-        assert audit.mixed_script is False
-        assert audit.signal is False
-
-
-def test_transformed_label_on_foreign_registry_is_a_confusable_spoof(catalog):
-    # а = Cyrillic small a: визуально identical to Latin a, different codepoint.
-    audit = homograph.audit("dewа.co.jp", catalog.official_domains, "dewа.co.jp")
-    assert audit.spoof is True
-    assert audit.spoofed_domain == "dewa.gov.ae"

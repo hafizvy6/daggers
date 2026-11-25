@@ -38,3 +38,12 @@ export function kv(pairs) {
 export function stack(...children) { return el("div", { class: "stack" }, ...children); }
 export function row(...children) { return el("div", { class: "row" }, ...children); }
 export { el };
+
+/** Card shown when the backend answers 401/403 for investigative data. */
+export function authGate(err) {
+  const forbidden = err?.status === 403;
+  return el("section", { class: "card" },
+    el("div", { class: "card-title" }, el("span", { text: t(forbidden ? "auth.forbiddenTitle" : "auth.requiredTitle") })),
+    el("p", { text: t(forbidden ? "auth.forbiddenBody" : "auth.requiredBody") }),
+    forbidden ? null : el("a", { class: "btn btn-primary", href: `#/login/${location.hash.replace(/^#\/?/, "")}`, text: t("auth.signIn") }));
+}

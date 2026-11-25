@@ -3,8 +3,8 @@
     python -m backend.app.channels.official.cli list [--status pending]
     python -m backend.app.channels.official.cli show <id>
     python -m backend.app.channels.official.cli validate
-    python -m backend.app.channels.official.cli approve <id> --reviewer NAME
-    python -m backend.app.channels.official.cli revoke <id> --reviewer NAME --reason TEXT
+    python -m backend.app.channels.official.cli approve <id> [--reviewer NAME]
+    python -m backend.app.channels.official.cli revoke <id> --reason TEXT
     python -m backend.app.channels.official.cli authenticate <url>
     python -m backend.app.channels.official.cli verify "<claim text>" [--records FILE]
     python -m backend.app.channels.official.cli discover --html FILE --source-url URL [--write]
@@ -87,7 +87,7 @@ def cmd_approve(args) -> int:
         "id", "organization", "domains", "subdomain_policy", "allowed_subdomains", "source_class",
         "jurisdiction", "authority_scope", "source_urls", "provenance")}, ensure_ascii=False, indent=2))
     if not _confirm(
-        f"Approve '{entry.id}' as reviewer '{args.reviewer}'? You confirm you verified these domains, "
+        f"Approve '{entry.id}'? You confirm you verified these domains, "
         "class, jurisdiction and scope against the entity's own official channels.",
         args.yes,
     ):
@@ -99,7 +99,36 @@ def cmd_approve(args) -> int:
     except RegistryError as exc:
         print(f"refused: {exc}", file=sys.stderr)
         return 1
-    print(f"approved {args.id} (reviewer {args.reviewer})")
+    print(f"approved {args.id}")
+    return 0
+
+
+def cmd_approve_verified(args) -> int:
+    """Approve every PENDING entry whose provenance records a completed verification
+    ('verified <date>: <evidence>'). The list comes from the registry's own data, not from code.
+    Entries marked 'partially checked' (or without evidence) are left pending."""
+    registry = _load(args)
+    ids = [e.id for e in registry.entries if e.status == "pending"
+           and str(e.provenance or "").strip().lower().startswith("verified ")]
+    if not ids:
+        print("no pending entries with recorded verification evidence")
+        return 0
+    for entry_id in ids:
+        entry = registry.by_id[entry_id]
+        print(f"- {entry_id}: {', '.join(entry.domains)} ({entry.source_class}) — {entry.provenance[:160]}")
+    if not _confirm(f"Approve these {len(ids)} entries? You confirm you checked the "
+                    "evidence above.", args.yes):
+        print("aborted")
+        return 1
+    try:
+        for entry_id in ids:
+            data = registry.approved_mapping(entry_id, args.reviewer, utc_now())
+            registry = write_registry_atomic(registry.path or DEFAULT_REGISTRY_PATH, data,
+                                             allow_synthetic=args.allow_synthetic)
+    except RegistryError as exc:
+        print(f"refused: {exc}", file=sys.stderr)
+        return 1
+    print(f"approved {len(ids)} entries")
     return 0
 
 
@@ -176,9 +205,13 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("list"); p.add_argument("--status", choices=["pending", "approved", "revoked"]); p.set_defaults(func=cmd_list)
     p = sub.add_parser("show"); p.add_argument("id"); p.set_defaults(func=cmd_show)
     p = sub.add_parser("validate"); p.set_defaults(func=cmd_validate)
-    p = sub.add_parser("approve"); p.add_argument("id"); p.add_argument("--reviewer", required=True)
+    p = sub.add_parser("approve"); p.add_argument("id"); p.add_argument("--reviewer", default=None, help="optional")
     p.add_argument("--yes", action="store_true", help="skip the interactive confirmation"); p.set_defaults(func=cmd_approve)
-    p = sub.add_parser("revoke"); p.add_argument("id"); p.add_argument("--reviewer", required=True)
+    p = sub.add_parser("approve-verified", help="approve every pending entry whose provenance records a verification")
+    p.add_argument("--reviewer", default=None, help="optional")
+    p.add_argument("--yes", action="store_true", help="skip the interactive confirmation")
+    p.set_defaults(func=cmd_approve_verified)
+    p = sub.add_parser("revoke"); p.add_argument("id"); p.add_argument("--reviewer", default=None, help="optional")
     p.add_argument("--reason", required=True); p.set_defaults(func=cmd_revoke)
     p = sub.add_parser("authenticate"); p.add_argument("url"); p.set_defaults(func=cmd_authenticate)
     p = sub.add_parser("verify"); p.add_argument("text"); p.add_argument("--records"); p.set_defaults(func=cmd_verify)

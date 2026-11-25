@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
+
+import yaml
 from dataclasses import dataclass
 
 from . import normalize
@@ -27,6 +30,23 @@ class Comparison:
     record_concepts: tuple[str, ...]
     record_amounts_aed: tuple[float, ...]
     record_denies: bool
+    # per-attribute outcome: match | differs | not_stated | not_compared
+    attributes: dict | None = None
+
+
+# Places named in a claim → registry jurisdiction ids (EN + AR) — data: lexicon.yaml "places".
+PLACES = {str(name): str(juris) for juris, names in
+          (yaml.safe_load(Path(__file__).with_name("lexicon.yaml").read_text(encoding="utf-8")).get("places") or {}).items()
+          for name in names}
+
+
+def claim_jurisdictions(claim: Claim, registry: Registry) -> set[str]:
+    out = {registry.by_id[e].jurisdiction for e in claim.entity_ids if e in registry.by_id}
+    key = normalize.match_key(claim.raw)
+    for place, juris in PLACES.items():
+        if normalize.contains_phrase(key, normalize.match_key(place)):
+            out.add(juris)
+    return {j for j in out if j}
 
 
 def _excerpt(record: OfficialRecord, lexicon: Lexicon, concepts: set[str]) -> str:
@@ -59,13 +79,33 @@ def compare(
     record_amounts = tuple(sorted({a.aed for a in normalize.extract_amounts(text)}))
     record_denies = lexicon.is_denial(text)
 
-    # --- relevance: right entity / authority AND same topic
-    entity_ok = (
-        entry.id in claim.entity_ids
-        or _mentions_entity(record, claim, registry)
-        or (entry.source_class == "A" and bool(set(entry.authority_scope) & set(claim.categories)))
-        or (not claim.entity_ids and entry.source_class == "B")
-    )
+    # --- relevance: right ISSUING AUTHORITY, right JURISDICTION, same topic
+    named_by_claim = entry.id in claim.entity_ids
+    mentions = _mentions_entity(record, claim, registry)
+    if claim.entity_ids:
+        # The claim names a specific authority. Its own records and records naming it are compared;
+        # another Class A authority responsible for the same subject is compared too (it may
+        # CONTRADICT the claim), but verify.py never lets it VERIFY a claim about a different
+        # authority on its own (attributes.authority == "differs").
+        entity_ok = (named_by_claim or mentions
+                     or (entry.source_class == "A" and bool(set(entry.authority_scope) & set(claim.categories))))
+    else:
+        entity_ok = (
+            (entry.source_class == "A" and bool(set(entry.authority_scope) & set(claim.categories)))
+            or entry.source_class in ("B", "C")
+        )
+    claim_juris = claim_jurisdictions(claim, registry) - {"federal"}
+    juris_ok = not claim_juris or entry.jurisdiction == "federal" or entry.jurisdiction in claim_juris
+    attributes = {
+        "authority": "match" if named_by_claim or mentions else ("not_stated" if not claim.entity_ids else "differs"),
+        "jurisdiction": ("not_stated" if not claim_juris else "match" if juris_ok else "differs"),
+        "service": "not_compared", "amount": "not_compared", "effective_date": "not_compared",
+    }
+    if not juris_ok:
+        excerpt = _excerpt(record, lexicon, record_concepts)
+        return Comparison(UNRELATED, f"different jurisdiction (claim: {', '.join(sorted(claim_juris))}; "
+                          f"source: {entry.jurisdiction})", excerpt, tuple(sorted(record_concepts)),
+                          record_amounts, record_denies, attributes)
     claim_topics = set(claim.concepts) - _NON_TOPICAL
     record_topics = record_concepts - _NON_TOPICAL
     if claim_topics:
@@ -85,8 +125,22 @@ def compare(
         topical = bool(set(claim.categories) & record_categories)
     excerpt = _excerpt(record, lexicon, shared or record_topics)
     if not (entity_ok and topical):
-        why = "different entity/authority" if not entity_ok else "different subject"
-        return Comparison(UNRELATED, why, excerpt, tuple(sorted(record_concepts)), record_amounts, record_denies)
+        why = "different issuing authority" if not entity_ok else "different subject"
+        attributes["service"] = "match" if topical else "differs"
+        return Comparison(UNRELATED, why, excerpt, tuple(sorted(record_concepts)), record_amounts, record_denies,
+                          attributes)
+    attributes["service"] = "match"
+
+    # --- effective date: when the claim states a date, the source must state the same one
+    claim_dates = set(claim.dates)
+    record_dates = set(normalize.extract_dates(text))
+    if claim_dates and record_dates:
+        attributes["effective_date"] = "match" if claim_dates & record_dates else "differs"
+    elif claim_dates:
+        attributes["effective_date"] = "not_stated"
+    if claim.amounts_aed:
+        attributes["amount"] = "not_stated" if not record_amounts else (
+            "match" if set(claim.amounts_aed) & set(record_amounts) else "differs")
 
     # --- stance: does the record affirm or deny the same thing the claim asserts?
     claim_denies = lexicon.is_denial(claim.raw)
@@ -96,21 +150,30 @@ def compare(
             if record_denies
             else "source affirms what the claim denies"
         )
-        return Comparison(CONTRADICTS, detail, excerpt, tuple(sorted(record_concepts)), record_amounts, record_denies)
+        return Comparison(CONTRADICTS, detail, excerpt, tuple(sorted(record_concepts)), record_amounts, record_denies,
+                          attributes)
+
+    if attributes["effective_date"] == "differs" and not record_denies:
+        detail = ("effective date not confirmed: claim " + ", ".join(sorted(claim_dates)) +
+                  "; source " + ", ".join(sorted(record_dates)[:3]))
+        return Comparison(RELATED, detail, excerpt, tuple(sorted(record_concepts)), record_amounts, record_denies,
+                          attributes)
 
     if not record_denies and claim.amounts_aed and record_amounts:
         claimed = set(claim.amounts_aed)
         official = set(record_amounts)
         if claimed & official:
             detail = f"amount matches source figure (AED {sorted(claimed & official)[0]:,.2f})"
-            return Comparison(SUPPORTS, detail, excerpt, tuple(sorted(record_concepts)), record_amounts, record_denies)
+            return Comparison(SUPPORTS, detail, excerpt, tuple(sorted(record_concepts)), record_amounts, record_denies,
+                              attributes)
         detail = (
             "amount differs: claim AED "
             + ", ".join(f"{v:,.2f}" for v in sorted(claimed))
             + "; source AED "
             + ", ".join(f"{v:,.2f}" for v in sorted(official))
         )
-        return Comparison(CONTRADICTS, detail, excerpt, tuple(sorted(record_concepts)), record_amounts, record_denies)
+        return Comparison(CONTRADICTS, detail, excerpt, tuple(sorted(record_concepts)), record_amounts, record_denies,
+                          attributes)
 
     if shared or not claim_topics:
         topics = ", ".join(sorted(shared)) or ", ".join(sorted(set(claim.categories) & record_categories))
@@ -121,5 +184,7 @@ def compare(
             tuple(sorted(record_concepts)),
             record_amounts,
             record_denies,
+            attributes,
         )
-    return Comparison(RELATED, "related but not decisive", excerpt, tuple(sorted(record_concepts)), record_amounts, record_denies)
+    return Comparison(RELATED, "related but not decisive", excerpt, tuple(sorted(record_concepts)), record_amounts,
+                      record_denies, attributes)

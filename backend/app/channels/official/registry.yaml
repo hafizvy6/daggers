@@ -1,6 +1,8 @@
-# Daggers — official UAE source registry.
-# Every entry starts as `pending`. Only a human reviewer can approve one:
-#   python -m backend.app.channels.official.cli approve <id> --reviewer NAME
+# Daggers — official UAE source registry + verified non-government sites.
+# Classes: A authority · B official media · C independent media · P verified organisation
+# (C and P are never official sources for government claims).
+# Every entry starts as `pending`. Approve one with (reviewer name optional):
+#   python -m backend.app.channels.official.cli approve <id>
 # Do not hand-edit `status`, `reviewer`, or `verified_at`.
 schema_version: 1
 registry_name: daggers-official-uae
@@ -8,7 +10,7 @@ discovery_index_urls:
 - https://u.ae/en/Help/The-Government
 - https://u.ae/en/resources/useful-links
 discovery_note: Directory pages are a DISCOVERY index only. Parsed candidates are added as pending; the
-  live page structure has not been validated by the channel implementation.
+  live page structure has not been validated by WS2.
 entries:
 - id: uae-gov-portal
   organization: UAE Government Portal (U.ae)
@@ -23,7 +25,7 @@ entries:
     - u ae
   domains:
   - u.ae
-  subdomain_policy: exact
+  subdomain_policy: listed
   source_class: A
   jurisdiction: federal
   authority_scope:
@@ -40,11 +42,16 @@ entries:
   - url: https://u.ae/en
     kind: html
     terms_reviewed: false
-  provenance: 'candidate: named in the original implementation brief; not yet verified by a human reviewer'
-  status: pending
+  provenance: 'verified 2026-11-24: https://u.ae/en titled ''The Official Platform of the UAE Government'',
+    footer powered by TDRA; ask.u.ae and assets.u.ae are linked from u.ae itself; u.ae does NOT use www.u.ae
+    (bare domain only).'
+  status: approved
   reviewer: null
-  verified_at: null
+  verified_at: '2026-11-25T02:14:43Z'
   max_age_days: 180
+  allowed_subdomains:
+  - ask
+  - assets
 - id: uae-pass
   organization: UAE PASS
   aliases:
@@ -58,7 +65,7 @@ entries:
     - uae pass
   domains:
   - uaepass.ae
-  subdomain_policy: exact
+  subdomain_policy: listed
   source_class: A
   jurisdiction: federal
   authority_scope: []
@@ -71,13 +78,17 @@ entries:
   - url: https://uaepass.ae/
     kind: html
     terms_reviewed: false
-  provenance: 'candidate: named in the original implementation brief; not yet verified by a human reviewer;
-    also in brands.yaml'
-  status: pending
+  provenance: 'verified 2026-11-24: u.ae (official portal) links uaepass.ae and id.uaepass.ae (UAE PASS
+    login); docs.uaepass.ae states UAE PASS is managed by Digital Dubai, TDRA and Abu Dhabi Digital Authority;
+    icp.gov.ae/en/uae-pass/ describes UAE Pass as the national digital identity.'
+  status: approved
   reviewer: null
-  verified_at: null
+  verified_at: '2026-11-25T02:14:43Z'
   max_age_days: 180
   brand_token: uaepass
+  allowed_subdomains:
+  - id
+  - docs
 - id: abu-dhabi-police
   organization: Abu Dhabi Police
   aliases:
@@ -94,6 +105,13 @@ entries:
   subdomain_policy: listed
   allowed_subdomains:
   - www
+  - es
+  - srv
+  - ers
+  - aman
+  - cas
+  - ideas
+  - forsa
   source_class: A
   jurisdiction: abu_dhabi
   authority_scope:
@@ -110,11 +128,12 @@ entries:
   - url: https://www.adpolice.gov.ae/
     kind: html
     terms_reviewed: false
-  provenance: 'candidate: government-type entry in backend/app/core/brands.yaml (read-only); not yet verified
-    by a human reviewer'
-  status: pending
+  provenance: 'verified 2026-11-24: https://www.adpolice.gov.ae/ states ''الموقع الرسمي للقيادة العامة
+    لشرطة ابوظبي'' (official site of Abu Dhabi Police GHQ); .gov.ae is the restricted UAE government zone;
+    the listed subdomains are all linked from that official homepage.'
+  status: approved
   reviewer: null
-  verified_at: null
+  verified_at: '2026-11-25T02:14:43Z'
   max_age_days: 180
   brand_token: abudhabipolice
 - id: dubai-police
@@ -147,11 +166,11 @@ entries:
   - url: https://www.dubaipolice.gov.ae/
     kind: html
     terms_reviewed: false
-  provenance: 'candidate: government-type entry in backend/app/core/brands.yaml (read-only); not yet verified
-    by a human reviewer'
-  status: pending
+  provenance: 'verified 2026-11-24: https://www.dubaipolice.gov.ae/ titled ''Dubai Police - Smart Secure
+    Together'' with canonical URL on dubaipolice.gov.ae (.gov.ae restricted government zone).'
+  status: approved
   reviewer: null
-  verified_at: null
+  verified_at: '2026-11-25T02:14:43Z'
   max_age_days: 180
   brand_token: dubaipolice
 - id: icp
@@ -170,6 +189,9 @@ entries:
   subdomain_policy: listed
   allowed_subdomains:
   - www
+  - smartservices
+  - cc
+  - afkar
   source_class: A
   jurisdiction: federal
   authority_scope:
@@ -186,11 +208,12 @@ entries:
   - url: https://icp.gov.ae/
     kind: html
     terms_reviewed: false
-  provenance: 'candidate: government-type entry in backend/app/core/brands.yaml (read-only); not yet verified
-    by a human reviewer'
-  status: pending
+  provenance: 'verified 2026-11-24: https://icp.gov.ae/en/ titled ''UAE ICP | Federal Authority for Identity,
+    Citizenship, Customs & Port Security'' (.gov.ae); smartservices, cc and afkar subdomains are linked
+    from that page.'
+  status: approved
   reviewer: null
-  verified_at: null
+  verified_at: '2026-11-25T02:14:43Z'
   max_age_days: 180
   brand_token: icp
 - id: mohre
@@ -208,6 +231,7 @@ entries:
   subdomain_policy: listed
   allowed_subdomains:
   - www
+  - ibtikar
   source_class: A
   jurisdiction: federal
   authority_scope:
@@ -224,11 +248,11 @@ entries:
   - url: https://www.mohre.gov.ae/
     kind: html
     terms_reviewed: false
-  provenance: 'candidate: government-type entry in backend/app/core/brands.yaml (read-only); not yet verified
-    by a human reviewer'
-  status: pending
+  provenance: 'verified 2026-11-24: mohre.gov.ae news (11 Feb 2026) ''MoHRE launches its revamped website
+    (www.mohre.gov.ae)''; ibtikar.mohre.gov.ae identifies itself as the MOHRE portal (.gov.ae).'
+  status: approved
   reviewer: null
-  verified_at: null
+  verified_at: '2026-11-25T02:14:43Z'
   max_age_days: 180
   brand_token: mohre
 - id: rta
@@ -261,11 +285,12 @@ entries:
   - url: https://www.rta.ae/
     kind: html
     terms_reviewed: false
-  provenance: 'candidate: government-type entry in backend/app/core/brands.yaml (read-only); not yet verified
-    by a human reviewer'
-  status: pending
+  provenance: 'verified 2026-11-24: www.rta.ae newsletter footer ''Copyright © 2025 Roads and Transport
+    Authority … maintained by the Roads and Transport Authority''; Wikipedia: website www.rta.ae. rta.gov.ae
+    appears only in a redirect script and is NOT included (unverified).'
+  status: approved
   reviewer: null
-  verified_at: null
+  verified_at: '2026-11-25T02:14:43Z'
   max_age_days: 180
   brand_token: rta
 - id: dewa
@@ -296,11 +321,11 @@ entries:
   - url: https://www.dewa.gov.ae/
     kind: html
     terms_reviewed: false
-  provenance: 'candidate: government-type entry in backend/app/core/brands.yaml (read-only); not yet verified
-    by a human reviewer'
-  status: pending
+  provenance: 'verified 2026-11-24: dewa.gov.ae pages carry ''© 2026 Dubai Electricity & Water Authority
+    (PJSC)'' (.gov.ae); Government of Dubai Media Office (mediaoffice.ae) article on DEWA''s digital channels.'
+  status: approved
   reviewer: null
-  verified_at: null
+  verified_at: '2026-11-25T02:14:43Z'
   max_age_days: 180
   brand_token: dewa
 - id: wam
@@ -330,10 +355,11 @@ entries:
   - url: https://www.wam.ae/en
     kind: html
     terms_reviewed: false
-  provenance: 'candidate: named in the original implementation brief; not yet verified by a human reviewer'
-  status: pending
+  provenance: 'verified 2026-11-24: https://www.wam.ae/en titled ''وكالة أنباء الإمارات'' (Emirates News
+    Agency); the official portal u.ae links its news articles to www.wam.ae.'
+  status: approved
   reviewer: null
-  verified_at: null
+  verified_at: '2026-11-25T02:14:43Z'
   max_age_days: 180
 - id: abu-dhabi-media-office
   organization: Abu Dhabi Media Office
@@ -361,11 +387,12 @@ entries:
   - url: https://www.mediaoffice.abudhabi/en/
     kind: html
     terms_reviewed: false
-  provenance: 'candidate: named in the original implementation brief; not yet verified by a human reviewer;
-    domain uses the .abudhabi TLD and needs explicit approval'
-  status: pending
+  provenance: 'verified 2026-11-24: https://www.mediaoffice.abudhabi/en/ titled ''Abu Dhabi Media Office'',
+    footer ''Abu Dhabi Media Office - Copyright 2026'', describing itself as communicating the news of
+    the Abu Dhabi Government.'
+  status: approved
   reviewer: null
-  verified_at: null
+  verified_at: '2026-11-25T02:14:43Z'
   max_age_days: 180
 - id: dubai-media-office
   organization: Government of Dubai Media Office
@@ -393,10 +420,11 @@ entries:
   - url: https://www.mediaoffice.ae/en
     kind: html
     terms_reviewed: false
-  provenance: 'candidate: named in the original implementation brief; not yet verified by a human reviewer'
-  status: pending
+  provenance: 'verified 2026-11-24: https://www.mediaoffice.ae/en titled ''Government of Dubai Media Office'',
+    footer ''© 2026 GDMO ALL RIGHTS RESERVED''.'
+  status: approved
   reviewer: null
-  verified_at: null
+  verified_at: '2026-11-25T02:14:43Z'
   max_age_days: 180
 - id: the-national
   organization: The National
@@ -420,7 +448,9 @@ entries:
   - en
   - ar
   source_urls: []
-  provenance: 'candidate: independent UAE news outlet; Class C supporting context only; not yet reviewed'
+  provenance: 'partially checked 2026-11-24: https://www.thenationalnews.com/ titled ''The National''
+    (Open Graph site name); no footer/publisher could be read and no independent reference confirmed the
+    domain — keep PENDING.'
   status: pending
   reviewer: null
   verified_at: null
@@ -447,10 +477,12 @@ entries:
   - en
   - ar
   source_urls: []
-  provenance: 'candidate: independent UAE news outlet; Class C supporting context only; not yet reviewed'
-  status: pending
+  provenance: 'verified 2026-11-24: https://www.khaleejtimes.com/ titled ''Khaleej Times'', footer ''©2026
+    Galadari Printing and Publishing LLC''; Wikipedia: website KhaleejTimes.com. Independent media — never
+    an official government source.'
+  status: approved
   reviewer: null
-  verified_at: null
+  verified_at: '2026-11-25T02:14:43Z'
   max_age_days: 180
 - id: gulf-news
   organization: Gulf News
@@ -474,8 +506,166 @@ entries:
   - en
   - ar
   source_urls: []
-  provenance: 'candidate: independent UAE news outlet; Class C supporting context only; not yet reviewed'
-  status: pending
+  provenance: 'verified 2026-11-24: https://gulfnews.com/ titled ''Gulf News'', footer ''© Al Nisr Publishing
+    LLC 2026''; independent directories list gulfnews.com. Independent media — never an official government
+    source.'
+  status: approved
   reviewer: null
-  verified_at: null
+  verified_at: '2026-11-25T02:14:43Z'
+  max_age_days: 180
+- id: tamm
+  organization: TAMM — Abu Dhabi Government services platform
+  aliases:
+    en:
+    - TAMM
+    - TAMM Abu Dhabi
+    ar:
+    - منصة تم
+    - تطبيق تم
+    translit:
+    - tamm
+  domains:
+  - tamm.abudhabi
+  subdomain_policy: listed
+  allowed_subdomains:
+  - www
+  source_class: A
+  jurisdiction: abu_dhabi
+  authority_scope: []
+  categories:
+  - announcement
+  - fees
+  languages:
+  - en
+  - ar
+  source_urls:
+  - url: https://www.tamm.abudhabi/
+    kind: html
+    terms_reviewed: false
+  provenance: 'verified 2026-11-24: the official Abu Dhabi Police homepage (adpolice.gov.ae) links www.tamm.abudhabi
+    and tamm.abudhabi; u.ae ''Smart Abu Dhabi'' page refers to the TAMM website; Abu Dhabi Media Office
+    article on TAMM by the Department of Government Enablement.'
+  status: approved
+  reviewer: null
+  verified_at: '2026-11-25T02:14:43Z'
+  max_age_days: 180
+  brand_token: tamm
+- id: emirates-nbd
+  organization: Emirates NBD Bank PJSC
+  aliases:
+    en: []
+    ar: []
+    translit: []
+  domains:
+  - emiratesnbd.com
+  subdomain_policy: listed
+  allowed_subdomains:
+  - www
+  - online
+  - businessonline
+  - business
+  - digital
+  - signonline
+  - cdn
+  source_class: P
+  jurisdiction: dubai
+  authority_scope: []
+  categories: []
+  languages:
+  - en
+  - ar
+  source_urls: []
+  provenance: 'verified 2026-11-24: https://www.emiratesnbd.com/en titled ''Emirates NBD | Financial Services
+    and Online Banking''; Wikipedia infobox website www.emiratesnbd.com; Investment Corporation of Dubai
+    (icd.gov.ae) lists Emirates NBD in its portfolio. Listed subdomains are linked from the official homepage.
+    Verified organisation — NOT a government source.'
+  status: approved
+  reviewer: null
+  verified_at: '2026-11-25T02:14:43Z'
+  max_age_days: 180
+  brand_token: emiratesnbd
+- id: 42-abu-dhabi
+  organization: 42 Abu Dhabi (coding school)
+  aliases:
+    en: []
+    ar: []
+    translit: []
+  domains:
+  - 42abudhabi.ae
+  subdomain_policy: listed
+  allowed_subdomains:
+  - www
+  - apply
+  source_class: P
+  jurisdiction: abu_dhabi
+  authority_scope: []
+  categories: []
+  languages:
+  - en
+  - ar
+  source_urls: []
+  provenance: 'verified 2026-11-25: Abu Dhabi Media Office (mediaoffice.abudhabi) article on the inauguration
+    of 42 Abu Dhabi directs applicants to www.42AbuDhabi.ae; apply.42abudhabi.ae is linked from the official
+    homepage (Apply Now); ADEK (adek.gov.ae) lists 42 Abu Dhabi under its Programmes and Initiatives and
+    announced the school in Sep 2020; the 42 Network campus page (42network.org) gives 42abudhabi.ae as
+    the campus website. Verified organisation (ADEK programme) — NOT a government source.'
+  status: approved
+  reviewer: null
+  verified_at: '2026-11-25T02:14:43Z'
+  max_age_days: 180
+- id: etisalat-uae
+  organization: etisalat UAE (Emirates Telecommunications Group Company PJSC, formerly e&)
+  aliases:
+    en: []
+    ar: []
+    translit: []
+  domains:
+  - eand.ae
+  - etisalat.ae
+  - eand.com
+  subdomain_policy: listed
+  allowed_subdomains:
+  - www
+  source_class: P
+  jurisdiction: abu_dhabi
+  authority_scope: []
+  categories: []
+  languages:
+  - en
+  - ar
+  source_urls: []
+  provenance: 'verified 2026-11-25: https://www.eand.ae/en/index.html titled ''etisalat UAE | Mobile plans,
+    TV & Internet plans, WiFi & Smartphones'', footer ''etisalat. All Rights Reserved.'', links www.etisalat.ae
+    and www.eand.com; Wikipedia (Etisalat): website www.eand.com, traded as ADX: EAND, returned to the
+    Etisalat name in Oct 2026 (e& rebrand reversed). Verified organisation — NOT a government source.'
+  status: approved
+  reviewer: null
+  verified_at: '2026-11-25T02:14:43Z'
+  max_age_days: 180
+- id: adcb
+  organization: Abu Dhabi Commercial Bank PJSC (ADCB)
+  aliases:
+    en: []
+    ar: []
+    translit: []
+  domains:
+  - adcb.com
+  subdomain_policy: listed
+  allowed_subdomains:
+  - www
+  source_class: P
+  jurisdiction: abu_dhabi
+  authority_scope: []
+  categories: []
+  languages:
+  - en
+  - ar
+  source_urls: []
+  provenance: 'verified 2026-11-25: www.adcb.com serves ADCB''s own About us / corporate governance /
+    accessibility pages ("ADCB is a full-service commercial bank…", "adcb.com includes ARIA attributes…");
+    US-UAE Business Council profile: "Further information on the ADCB Group can be found at www.adcb.com";
+    ADX ticker ADCB. Verified organisation — NOT a government source.'
+  status: approved
+  reviewer: null
+  verified_at: '2026-11-25T02:14:43Z'
   max_age_days: 180

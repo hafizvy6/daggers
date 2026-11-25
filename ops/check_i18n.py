@@ -93,12 +93,19 @@ for f in sorted((WEB / "js").rglob("*.js")):
                 fail.append(f"{f.relative_to(ROOT)}:{i}: hardcoded case data → {m.group(0)[:50]}"
                             f"  (live UI must not invent product data)")
 
+# ---- integrated repo: secrets must never ship ----
+for env_file in ROOT.rglob(".env"):
+    if ".venv" not in env_file.parts and "node_modules" not in env_file.parts:
+        fail.append(f"{env_file.relative_to(ROOT)}: .env files must never be committed or shipped")
+
 # ---- production gate: no demo/seed/fixture data in product runtime ----
 FORBIDDEN = [
     "backend/seed",
     "web/fixtures",
     "web/evidence",
     "ops/demo",
+    "web/js/views/number.js",
+    "web/js/views/portal_fallback.js",
     "backend/app/channels/fixtures",
     "backend/app/channels/official/fixtures",
     "backend/app/channels/ws2.env.example",

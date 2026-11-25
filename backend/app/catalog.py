@@ -21,7 +21,17 @@ def _read_structured(path: Path) -> object:
 
 
 def _make_suffix_resolver() -> Callable[[str], str | None] | None:
-    """Use tldextract's offline snapshot when present; never fetch a suffix list at runtime."""
+    """The maintained Public Suffix List (intel.psl: bundled snapshot, refreshed by
+    `make reputation-update`), with PRIVATE suffixes so a tenant of a shared platform
+    (shop.github.io) is its own site. Falls back to tldextract's offline snapshot, then to the
+    engine's small built-in suffix table. Never fetches a suffix list at analysis time."""
+    try:
+        from .intel import psl as psl_mod
+
+        psl_mod.default()
+        return psl_mod.suffix_resolver
+    except Exception:
+        pass
     try:
         from tldextract import TLDExtract  # type: ignore[import-not-found]
 
@@ -50,27 +60,6 @@ class Catalog:
     @property
     def official_domains(self) -> tuple[str, ...]:
         return tuple(str(brand["official_domain"]).lower() for brand in self.brands)
-
-    @property
-    def radar_terms(self) -> tuple[str, ...]:
-        """High-signal CT/DNS terms. Short brand tokens are never emitted raw."""
-        candidates: list[str] = []
-        for brand in self.brands:
-            official = str(brand["official_domain"]).strip().lower().rstrip(".")
-            first = official.split(".", 1)[0]
-            explicit = brand.get("radar_terms") or []
-            generated = [first, str(brand["token"]).lower()]
-            for alias in brand.get("aliases", []):
-                generated.append("".join(ch for ch in str(alias).casefold() if ch.isalnum()))
-            if first.startswith("bank") and len(first) > 4:
-                generated.append(first[4:] + "bank")
-            if first.endswith("bank") and len(first) > 4:
-                generated.append("bank" + first[:-4])
-            for term in [*explicit, *generated]:
-                compact = "".join(ch for ch in str(term).casefold() if ch in "abcdefghijklmnopqrstuvwxyz0123456789")
-                if len(compact) >= 4:
-                    candidates.append(compact)
-        return tuple(dict.fromkeys(candidates))
 
     @property
     def brand_tokens(self) -> tuple[str, ...]:
@@ -109,14 +98,17 @@ def load_catalogs(core_dir: Path | None = None) -> Catalog:
     for item in brands_raw:
         if not isinstance(item, dict) or not item.get("token") or not item.get("official_domain"):
             raise RuntimeError("Every brand needs token and official_domain")
-        brands.append(
-            {
-                "token": str(item["token"]).lower(),
-                "official_domain": str(item["official_domain"]).lower(),
-                "aliases": [str(alias).lower() for alias in item.get("aliases", [])],
-                "radar_terms": [str(term).lower() for term in item.get("radar_terms", [])],
-            }
-        )
+        # A brand may own several real domains (other_official_domains): each is genuine, so a
+        # brand name on any of them is not impersonation. Data only — verified per brand.
+        for domain in [item["official_domain"], *(item.get("other_official_domains") or [])]:
+            brands.append(
+                {
+                    "token": str(item["token"]).lower(),
+                    "official_domain": str(domain).lower(),
+                    "aliases": [str(alias).lower() for alias in item.get("aliases", [])],
+                    "sector": str(item.get("sector") or "").lower(),
+                }
+            )
 
     lures = {
         str(group): tuple(str(term).lower() for term in terms)

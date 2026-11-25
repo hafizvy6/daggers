@@ -3,8 +3,9 @@
  * the popup and the Node tests. No DOM, no chrome.* calls, no network here.
  *
  * The extension NEVER computes a verdict. It only displays the backend's `tag`.
- * SAFE is shown only when the backend says tag === "SAFE" AND reports an
- * authenticated official domain. Any failure, missing field or unknown value
+ * SAFE is shown only when the backend says tag === "SAFE" AND reports either an
+ * authenticated official (government) domain or an approved legitimate site
+ * (news outlet / verified organisation). Any failure, missing field or unknown value
  * is displayed as a neutral "not checked" / "unverified" label — never green.
  */
 (function (root, factory) {
@@ -29,7 +30,10 @@
   ];
 
   const LABELS = {
-    SAFE: { text: "SAFE", cls: "daggers-tag--safe", title: "Authenticated official source with no suspicious signals." },
+    SAFE: { text: "SAFE", cls: "daggers-tag--safe", title: "Authenticated official government source with no suspicious signals." },
+    SAFE_SITE: { text: "SAFE", cls: "daggers-tag--safe", title: "Verified legitimate website (not a government source) with no suspicious signals." },
+    SAFE_ESTABLISHED: { text: "SAFE", cls: "daggers-tag--safe", title: "Established website (old domain, HTTPS, no warning signs) — not a government source." },
+    SAFE_POPULAR: { text: "SAFE", cls: "daggers-tag--safe", title: "Widely used website (not a government source) with no warning signs." },
     WARNING: { text: "WARNING", cls: "daggers-tag--warning", title: "Not an authenticated official source, or needs review." },
     MISLEADING: { text: "MISLEADING", cls: "daggers-tag--misleading", title: "Contains a claim that is contradicted or cannot be verified." },
     FAKE: { text: "FAKE", cls: "daggers-tag--fake", title: "Confirmed malicious or impersonation evidence." },
@@ -77,7 +81,13 @@
     const tag = response.tag;
     if (tag === "SAFE") {
       const auth = response.domain_auth;
-      return auth && auth.authenticated === true ? LABELS.SAFE : LABELS.UNVERIFIED;
+      if (auth && auth.authenticated === true) return LABELS.SAFE;
+      if (auth && auth.legitimate_site === true) {
+        if (auth.status === "REPUTABLE_SITE") return LABELS.SAFE_POPULAR;
+        if (auth.status === "ESTABLISHED_SITE") return LABELS.SAFE_ESTABLISHED;
+        return LABELS.SAFE_SITE;
+      }
+      return LABELS.UNVERIFIED;
     }
     if (tag === "WARNING" || tag === "MISLEADING" || tag === "FAKE") return LABELS[tag];
     if (tag === undefined || tag === null) {
@@ -111,7 +121,11 @@
     return {
       tag: body.tag === undefined ? undefined : body.tag,
       verdict: body.verdict,
-      domain_auth: body.domain_auth ? { authenticated: body.domain_auth.authenticated === true, status: body.domain_auth.status } : null,
+      domain_auth: body.domain_auth ? {
+        authenticated: body.domain_auth.authenticated === true,
+        legitimate_site: body.domain_auth.legitimate_site === true,
+        status: body.domain_auth.status
+      } : null,
       trust_reasons: Array.isArray(body.trust_reasons) ? body.trust_reasons.slice(0, 5) : undefined,
       reasons: Array.isArray(body.reasons) ? body.reasons.slice(0, 5) : []
     };

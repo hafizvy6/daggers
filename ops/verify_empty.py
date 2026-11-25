@@ -10,7 +10,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from fastapi.testclient import TestClient
+try:
+    import fastapi  # noqa: F401
+except ImportError:  # test harness only (real FastAPI is installed in every deployment)
+    sys.path.insert(0, str(ROOT / "backend" / "tests" / "_compat"))
+from fastapi.testclient import TestClient  # noqa: E402
 
 from backend.app.config import Settings
 from backend.app.main import create_app
@@ -34,14 +38,17 @@ def main() -> None:
             status = client.get("/api/status").json()
             health = client.get("/api/healthz").json()
             feed = client.get("/api/feed").json()
-            reports = client.get("/api/reports").json()
+            reports_status = client.get("/api/reports").status_code        # portal data: login required
+            portal_status = client.get("/api/portal/findings").status_code
+            stored_reports = app.state.runtime.repo.list_reports() if hasattr(app.state.runtime.repo, "list_reports") else []
             guard = client.get("/api/guard/feed").text
             examples = client.get("/api/examples").json()
 
             assert status["mode"] == "live", status
             assert status["counts"] == {"domains": 0, "findings": 0, "evidence": 0}, status
             assert feed == [], feed
-            assert reports["reports"] == [], reports
+            assert reports_status == 401 and portal_status == 401, (reports_status, portal_status)
+            assert stored_reports == [], stored_reports
             assert guard.strip() == "", guard
             assert examples["check"] == [] and examples["numbers"] == [], examples
             external = {k: v for k, v in health["adapters"].items() if k != "guard"}

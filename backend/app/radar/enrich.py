@@ -12,7 +12,6 @@ import httpx
 
 from ..catalog import Catalog
 from ..config import Settings
-from .gate import fetch_page_context
 
 
 def parse_age_hours(value: Any) -> float | None:
@@ -74,6 +73,7 @@ class Enricher:
     def __init__(self, settings: Settings, catalog: Catalog) -> None:
         self.settings = settings
         self.catalog = catalog
+        self._rdap_client = None
 
     async def _bounded(self, awaitable, timeout: float) -> dict:
         try:
@@ -83,31 +83,15 @@ class Enricher:
             return {}
 
     async def _rdap(self, domain: str) -> dict:
-        headers = {"User-Agent": self.settings.http_user_agent, "Accept": "application/rdap+json"}
-        async with httpx.AsyncClient(timeout=self.settings.http_timeout_s, headers=headers) as client:
-            response = await client.get(f"https://rdap.org/domain/{domain}")
-            response.raise_for_status()
-            payload = response.json()
-        created = next(
-            (
-                event.get("eventDate")
-                for event in payload.get("events", [])
-                if str(event.get("eventAction", "")).lower() == "registration"
-            ),
-            None,
-        )
-        registrar = None
-        for entity in payload.get("entities", []):
-            roles = {str(role).lower() for role in entity.get("roles", [])}
-            if "registrar" in roles:
-                vcard = entity.get("vcardArray") or []
-                props = vcard[1] if len(vcard) > 1 and isinstance(vcard[1], list) else []
-                registrar = next(
-                    (prop[3] for prop in props if isinstance(prop, list) and len(prop) > 3 and prop[0] == "fn"),
-                    None,
-                )
-                break
-        return {"rdap_created": created, "rdap_registrar": registrar}
+        """Registration date ONLY (RDAP 'registration' event of the registrable domain, IANA bootstrap).
+        Never certificate age, DNS age or 'last changed'. Unknown stays None."""
+        if self._rdap_client is None:
+            from ..intel.rdap import RDAPClient
+            self._rdap_client = RDAPClient(cache_dir=self.settings.db_path.parent if self.settings.db_path else None,
+                                           timeout_s=self.settings.http_timeout_s)
+        age = await asyncio.to_thread(self._rdap_client.lookup, domain)
+        return {"rdap_created": age.registered_at if age.known else None, "rdap_registrar": age.registrar,
+                "rdap_status": age.status}
 
     async def _dns(self, domain: str) -> dict:
         loop = asyncio.get_running_loop()
@@ -171,7 +155,6 @@ class Enricher:
                 "rdap_created": None,
                 "rdap_registrar": None,
                 "tls_issuer": None,
-                "page_context": {},
             }
         timeout = self.settings.http_timeout_s
         results = await asyncio.gather(
@@ -179,7 +162,6 @@ class Enricher:
             self._bounded(self._dns(domain), timeout),
             self._bounded(self._tls(domain), timeout),
             self._bounded(self._favicon(domain), timeout),
-            fetch_page_context(domain, self.settings),
         )
         merged: dict = {
             "rdap_created": None,
@@ -188,12 +170,10 @@ class Enricher:
             "tls_issued": cert_issued,
             "tls_issuer": None,
             "favicon_hash": None,
-            "page_context": {},
         }
-        for result in results[:-1]:
+        for result in results:
             merged.update(result)
-        page_context = results[-1]
-        merged["page_context"] = page_context.as_dict() if page_context else {}
-        issued = merged.get("tls_issued") or cert_issued or merged.get("rdap_created")
+        # Certificate age comes from the CERTIFICATE only — never from the domain registration date.
+        issued = merged.get("tls_issued") or cert_issued
         merged["cert_age_hours"] = parse_age_hours(issued)
         return merged

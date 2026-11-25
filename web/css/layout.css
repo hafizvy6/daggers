@@ -106,7 +106,7 @@ html[lang="ar"] .nav-group-label { letter-spacing: 0; }
 }
 html[lang="ar"] .page-head .page-kicker { letter-spacing: 0; }
 
-/* ---------------- banner (offline / availability) -------- */
+/* ---------------- banner (offline / demo) ------------------ */
 .banner {
   grid-area: banner;
   display: none;
@@ -117,6 +117,7 @@ html[lang="ar"] .page-head .page-kicker { letter-spacing: 0; }
   font-size: var(--fs-sm); font-weight: 500;
 }
 .banner.is-on { display: flex; }
+.banner.is-demo { background: var(--accent-tint); color: var(--accent-deep); }
 .banner .banner-tag {
   font-family: var(--font-mono); font-size: var(--fs-xs); font-weight: 600;
   border: 2px solid currentColor; border-radius: var(--radius);

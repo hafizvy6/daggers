@@ -1,11 +1,12 @@
 """Sweep persistence behind one interface.
 
-``RepoSweepStore`` persists runs through the shared repository (``db/repo.py``),
-which is the production path. ``InMemorySweepStore`` exists only as a fallback
-for a repository that does not expose the sweep methods (e.g. some test doubles).
+``RepoSweepStore`` uses WS1 repository methods when WS1 has added them (see
+docs/WS2.md → "Repository methods needed"). Until then ``InMemorySweepStore``
+is used. **The in-memory store is TEMPORARY**: runs are lost on restart and are
+capped in number. Both stores return the same contract.
 
-Row shape mirrors the ``sweep_runs`` / ``sweep_results`` schema; additive fields
-(tag, domain_auth, …) travel in ``detail``.
+Row shape mirrors the existing ``sweep_runs`` / ``sweep_results`` schema; WS2's
+additive fields (tag, domain_auth, …) travel in ``detail``.
 """
 from __future__ import annotations
 
@@ -14,7 +15,8 @@ from typing import Protocol
 
 from .official.models import iso, utc_now
 
-REPO_METHODS = ("create_sweep_run", "add_sweep_results", "get_sweep_run")
+REPO_METHODS = ("create_sweep_run", "add_sweep_results", "get_sweep_run", "update_sweep_run", "list_sweep_runs")
+RUN_FIELDS = ("status", "stage", "engine", "cached", "source_kind", "errors", "error", "counts")
 
 
 class SweepStore(Protocol):
@@ -26,7 +28,7 @@ class SweepStore(Protocol):
 
 
 class InMemorySweepStore:
-    """In-process store without SQL — only for repositories lacking sweep methods. Oldest runs are evicted past ``max_runs``."""
+    """TEMPORARY in-process store (no SQL). Oldest runs are evicted past ``max_runs``."""
 
     backend = "memory-temporary"
 
@@ -36,10 +38,12 @@ class InMemorySweepStore:
         self._next = 1
         self._lock = threading.Lock()
 
-    def create_run(self, *, query: str, lang: str, channel: str, engine: str, cached: bool) -> dict:
+    def create_run(self, *, query: str, lang: str, channel: str, engine: str, cached: bool,
+                   query_id: str | None = None) -> dict:
         with self._lock:
             run = {"id": self._next, "query": query, "lang": lang, "channel": channel, "engine": engine,
-                   "cached": bool(cached), "created_at": iso(utc_now()), "results": []}
+                   "cached": bool(cached), "created_at": iso(utc_now()), "query_id": query_id,
+                   "status": "queued", "results": []}
             self._runs[self._next] = run
             self._next += 1
             while len(self._runs) > self.max_runs:
@@ -51,6 +55,20 @@ class InMemorySweepStore:
             if run_id in self._runs:
                 self._runs[run_id]["results"].extend(dict(r) for r in results)
 
+    def update_run(self, run_id: int, **fields) -> None:
+        with self._lock:
+            run = self._runs.get(run_id)
+            if run is None:
+                return
+            run.update({k: v for k, v in fields.items() if k in RUN_FIELDS})
+            if fields.get("status") in ("completed", "failed"):
+                run["finished_at"] = iso(utc_now())
+
+    def list_runs(self, limit: int = 50) -> list[dict]:
+        with self._lock:
+            runs = sorted(self._runs.values(), key=lambda r: r["id"], reverse=True)[:limit]
+            return [{k: v for k, v in r.items() if k != "results"} | {"result_count": len(r["results"])} for r in runs]
+
     def get_run(self, run_id: int) -> dict | None:
         with self._lock:
             run = self._runs.get(run_id)
@@ -60,7 +78,7 @@ class InMemorySweepStore:
 
 
 class RepoSweepStore:
-    """Adapter over the shared ``Repository`` sweep methods."""
+    """Adapter over WS1 ``Repository`` sweep methods (only once WS1 provides them)."""
 
     backend = "sqlite"
 
@@ -70,8 +88,16 @@ class RepoSweepStore:
             raise AttributeError(f"repository lacks {missing}")
         self.repo = repo
 
-    def create_run(self, *, query: str, lang: str, channel: str, engine: str, cached: bool) -> dict:
-        return self.repo.create_sweep_run(query=query, lang=lang, channel=channel, engine=engine, cached=cached)
+    def create_run(self, *, query: str, lang: str, channel: str, engine: str, cached: bool,
+                   query_id: str | None = None) -> dict:
+        return self.repo.create_sweep_run(query=query, lang=lang, channel=channel, engine=engine,
+                                          cached=cached, query_id=query_id)
+
+    def update_run(self, run_id: int, **fields) -> None:
+        self.repo.update_sweep_run(run_id, **{k: v for k, v in fields.items() if k in RUN_FIELDS})
+
+    def list_runs(self, limit: int = 50) -> list[dict]:
+        return self.repo.list_sweep_runs(limit)
 
     def add_results(self, run_id: int, results: list[dict]) -> None:
         self.repo.add_sweep_results(run_id, results)

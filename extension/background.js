@@ -63,7 +63,8 @@ async function checkOne(url, lang, apiBase) {
     } finally {
       clearTimeout(timer);
     }
-    await cachePut(url, value);
+    // Only real answers are cached: a failure is retried next time (it shows NOT CHECKED, never SAFE).
+    if (!value.error) await cachePut(url, value);
     return value;
   });
 }

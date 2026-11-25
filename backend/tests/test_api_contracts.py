@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from backend.app.reports.builder import validate_zero_pii
+from backend.tests.conftest import login_as
 
 FINDING_KEYS = {
     "id", "domain", "verdict", "score", "reasons", "cert_issued", "first_seen",
@@ -13,6 +14,13 @@ FINDING_KEYS = {
 SCAN_KEYS = {
     "kind", "input", "verdict", "score", "reasons",
     "evidence_url", "scam_type", "offline_capable",
+    # full engine output (annotated signals + what was analysed)
+    "signals", "analyzed_url", "normalized", "homograph", "urls",
+    # central verdict (trust policy)
+    "tag", "manual_review", "domain_auth", "gov_verification", "trust_reasons", "blockable", "policy_version",
+    "maliciousness", "reputation_version",
+    # explainability (additive): stable reason codes, redirect target authentication, evidence + freshness
+    "reason_codes", "final_domain_auth", "evidence", "live_evidence",
 }
 
 
@@ -48,7 +56,7 @@ def test_boot_creates_empty_schema_without_seed_assets(api_env):
     assert settings.db_path.exists()
     assert list(settings.evidence_dir.glob("*.jpg")) == []
     assert app.state.runtime.repo.get_meta("mode") == "live"
-    assert app.state.runtime.repo.get_meta("schema_version") == "1"
+    assert app.state.runtime.repo.get_meta("schema_version") == "3"
     assert app.state.runtime.repo.get_meta("seeded_at") is None
 
 
@@ -83,10 +91,9 @@ def test_scan_contracts_are_live_pure_brain_without_invented_evidence(api_env):
     assert body["evidence_url"] is None
     assert body["offline_capable"] is True
 
-    number = client.post("/api/scan", json={"kind": "number", "input": "+971900000042", "lang": "en"}).json()
-    assert set(number) == SCAN_KEYS
-    assert number["verdict"] == "MALICIOUS"
-    assert number["evidence_url"] is None
+    assert body["tag"] == "FAKE"
+    # phone-number checking is not part of the scan/Checker contract
+    assert client.post("/api/scan", json={"kind": "number", "input": "+971900000042", "lang": "en"}).status_code == 422
 
     claim = client.post(
         "/api/scan",
@@ -98,44 +105,11 @@ def test_scan_contracts_are_live_pure_brain_without_invented_evidence(api_env):
     assert client.post("/api/scan", json={"kind": "banana", "input": "x"}).status_code == 422
 
 
-def test_feed_default_hides_ct_only_unknowns(api_env, insert_test_finding):
-    client, _, _ = api_env
-    insert_test_finding(domain="ct-only-unknown.example", verdict="UNKNOWN", score=0.0)
-    suspicious = insert_test_finding(domain="brand-bait.example", verdict="SUSPICIOUS", score=0.55)
-
-    response = client.get("/api/feed")
-    assert response.status_code == 200
-    domains = {row["domain"] for row in response.json()}
-    assert suspicious["domain"] in domains
-    assert "ct-only-unknown.example" not in domains
-
-    included = client.get("/api/feed?include_unknown=true").json()
-    assert {row["domain"] for row in included} >= {"ct-only-unknown.example", "brand-bait.example"}
-
-
-def test_analyst_label_hides_suppressed_domains_from_feed(api_env, insert_test_finding):
-    client, _, _ = api_env
-    first = insert_test_finding(domain="feed-suppress-me.example", verdict="SUSPICIOUS", score=0.55)
-    second = insert_test_finding(domain="feed-keep-me.example", verdict="SUSPICIOUS", score=0.55)
-
-    response = client.post(f"/api/finding/{first['id']}/label", json={"label": "official"})
-    assert response.status_code == 200
-    assert response.json()["label"] == "official"
-    assert client.get(f"/api/finding/{first['id']}/label").json()["label"] == "official"
-
-    domains = {row["domain"] for row in client.get("/api/feed").json()}
-    assert second["domain"] in domains
-    assert first["domain"] not in domains
-
-    suppressed = {row["domain"] for row in client.get("/api/feed?include_suppressed=true").json()}
-    assert {first["domain"], second["domain"]} <= suppressed
-
-    assert client.post(f"/api/finding/{first['id']}/label", json={"label": "not-a-label"}).status_code == 422
-
-
 def test_mode_is_locked_to_live(api_env):
-    client, _, _ = api_env
+    client, _, app = api_env
     assert client.get("/api/mode").json() == {"mode": "live"}
+    assert client.post("/api/mode", json={"mode": "live"}).status_code == 401  # admin only
+    login_as(client, app, "admin")
     assert client.post("/api/mode", json={"mode": "live"}).json() == {"mode": "live"}
     assert client.post("/api/mode", json={"mode": "demo"}).status_code == 422
     assert client.post("/api/mode", json={"mode": "venue"}).status_code == 422
@@ -189,17 +163,13 @@ def test_sse_heartbeat_and_sweep_event(api_env):
     asyncio.run(collect())
 
 
-def test_optional_routers_are_mounted_after_integration(api_env):
+def test_all_integrated_routers_are_mounted(api_env):
     _, _, app = api_env
-    states = app.state.runtime.optional_routers
-    expected = {
-        "backend.app.api.sweep",
-        "backend.app.api.guard",
-        "backend.app.api.reports",
-        "backend.app.api.ai",
-    }
-    assert expected <= set(states)
-    assert all(states[name] == "mounted" for name in expected)
+    paths = {getattr(route, "path", "") for route in app.router.routes}
+    for path in ("/api/check", "/api/portal/findings", "/api/sweep", "/api/guard/blocklist.txt",
+                 "/api/reports", "/api/report/{report_id}/analysis", "/api/investigations",
+                 "/api/auth/login", "/api/examples"):
+        assert path in paths, path
 
 
 def test_no_sql_outside_repo_module():
@@ -265,7 +235,7 @@ def test_integration_scope_audit_no_deleted_product_data_paths():
     assert all((root / path).exists() for path in required)
     forbidden = [
         "daggers", "daggers-ws2-mohamed", "backend/app/server.py", "backend/app/store.py",
-        "backend/requirements.txt", "backend/seed", "web/fixtures", "web/evidence", "ops/demo",
+        "backend/requirements.txt", "backend/seed", "web/js/views/number.js", "web/fixtures", "web/evidence", "ops/demo",
         "backend/app/channels/fixtures", "backend/app/channels/official/fixtures",
         "backend/app/channels/ws2.env.example", "requirements-render.txt", "pytest.ini",
     ]
@@ -295,16 +265,12 @@ def test_enricher_failure_returns_complete_s5_shape(monkeypatch, tmp_path):
     async def fail(*args, **kwargs):
         raise RuntimeError("offline")
 
-    async def no_page(*args, **kwargs):
-        return None
-
-    monkeypatch.setattr("backend.app.radar.enrich.fetch_page_context", no_page)
     for method in ("_rdap", "_dns", "_tls", "_favicon"):
         monkeypatch.setattr(enricher, method, fail)
     result = asyncio.run(enricher.enrich("example.com"))
     assert set(result) == {
         "rdap_created", "rdap_registrar", "dns_a", "tls_issued",
-        "tls_issuer", "favicon_hash", "cert_age_hours", "page_context",
+        "tls_issuer", "favicon_hash", "cert_age_hours",
     }
     assert result["dns_a"] == []
 
@@ -361,14 +327,14 @@ def test_evidence_composition_requires_two_real_captures(tmp_path):
 
 
 def test_reports_are_empty_until_a_real_finding_is_inserted(api_env, insert_test_finding):
-    client, _, _ = api_env
+    client, _, app = api_env
+    assert client.get("/api/reports").status_code == 401  # portal data
+    login_as(client, app, "investigator")
     assert client.get("/api/reports").json() == {"reports": []}
-    assert client.post("/api/reports", json={"finding_id": 1}).status_code == 410
-    # Test helper writes directly to the repository; production reaches the same
-    # path automatically from the radar pipeline or startup backfill.
     finding = insert_test_finding()
-    report = client.app.state.runtime.report_queue.maybe_auto_file(finding)
-    assert report is not None
+    created = client.post("/api/reports", json={"finding_id": finding["id"]})
+    assert created.status_code == 201
+    report = created.json()
     validate_zero_pii(report)
     assert report["finding_id"] == finding["id"]
 
@@ -396,11 +362,12 @@ def test_guard_stats_keep_blocked_and_alias_keys_with_zero_data(api_env):
 
 
 def test_ws2_sweep_is_empty_when_live_providers_are_unconfigured(api_env):
-    client, _, _ = api_env
-    created = client.post("/api/sweep", json={"channel": "web", "lang": "en"})
+    client, _, app = api_env
+    login_as(client, app, "investigator")
+    created = client.post("/api/sweep?wait=true", json={"channel": "web", "lang": "en"})
     assert created.status_code == 200
     run = created.json()
-    assert run["source_kind"] == "unconfigured"
+    assert run["status"] == "failed" and "no live provider configured" in run["error"]
     assert run["synthetic"] is False
     assert run["results"] == []
     assert run["store"] == "sqlite"
@@ -415,11 +382,12 @@ def test_ws2_sweep_is_empty_when_live_providers_are_unconfigured(api_env):
 
 
 def test_ws3_reports_and_ai_routes_use_live_repository(api_env, insert_test_finding):
-    client, _, _ = api_env
+    client, _, app = api_env
+    login_as(client, app, "investigator")
     finding = insert_test_finding()
-    report = client.app.state.runtime.report_queue.maybe_auto_file(finding)
-    assert report is not None
-    report_id = report["id"]
+    filed = client.post("/api/reports", json={"finding_id": finding["id"]})
+    assert filed.status_code == 201
+    report_id = filed.json()["id"]
     advanced = client.post(f"/api/reports/{report_id}/advance", json={"status": "SEEN"})
     assert advanced.status_code == 200
     assert advanced.json()["status"] == "SEEN"
@@ -430,13 +398,3 @@ def test_ws3_reports_and_ai_routes_use_live_repository(api_env, insert_test_find
     takedown = client.post(f"/api/report/{report_id}/takedown")
     assert takedown.status_code == 200
     assert "letter_en" in takedown.json()
-
-
-def test_sweep_selfcheck_reports_per_adapter_outcome(api_env):
-    client, _, _ = api_env
-    response = client.get("/api/sweep/selfcheck")
-    assert response.status_code == 200
-    data = response.json()
-    assert set(data) == {"query", "search", "maps", "live"}
-    assert data["search"] == [] and data["maps"] == []  # no adapters configured in tests
-    assert data["live"] is False

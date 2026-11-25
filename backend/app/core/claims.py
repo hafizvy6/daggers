@@ -32,7 +32,7 @@ def _brand_tokens(brands: list[dict] | tuple[dict, ...]) -> tuple[str, ...]:
 @dataclass(frozen=True)
 class ClaimSignal:
     weight: float = 0.50
-    reason: str = "unverifiable claim — not found on official channels"
+    reason: str = "unverifiable claim — not confirmed by an authenticated official source"
     forced_min: str = MISLEADING
     scam_type: str = "unverifiable-giveaway-claim"
     matched_patterns: tuple[str, ...] = ()
@@ -71,6 +71,6 @@ def evaluate_claims(
     matched = offer_hits + entity_hits + ("brand_claim",) if brand_hits else offer_hits + entity_hits
     detail = ", ".join(matched[:6])
     return ClaimSignal(
-        reason=f"unverifiable claim — not found on official channels ({detail})",
+        reason=f"unverifiable claim — not confirmed by an authenticated official source ({detail})",
         matched_patterns=matched,
     )

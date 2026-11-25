@@ -10,4 +10,4 @@ Layering (pure → impure):
   a failed retrieval can never be mistaken for a verification.
 """
 
-POLICY_VERSION = "ws2-trust-1.0"
+POLICY_VERSION = "daggers-trust-2.2"  # 2.0: two SAFE paths, compromise → FAKE, data gaps ≠ evidence

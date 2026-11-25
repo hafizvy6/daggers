@@ -1,4 +1,4 @@
-# Default Sweep queries. Free text is allowed by default (SWEEP_ALLOW_ARBITRARY=0 disables it).
+# Default Sweep queries (WS2). Arbitrary queries require SWEEP_ALLOW_ARBITRARY=1.
 # Queries must never contain personal data; the Sweep API refuses them if they do.
 version: 1
 queries:

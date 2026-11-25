@@ -1,0 +1,89 @@
+# Daggers detection rules — DATA, not code. Edit here (no code change needed); restart or the next
+# process start picks it up. Every list only describes patterns; none of them makes a site SAFE.
+# Loaded by backend/app/core/rules.py. Validated at load (a broken file stops start-up loudly).
+
+# Low-cost top-level domains frequently used for throw-away scam sites (weak signal, +0.15).
+risky_tlds: [top, xyz, icu, click, live, cfd, rest, sbs, shop, online, site, fun, buzz, work, loan, gq, cf, tk, ml, ga]
+
+# Prize / giveaway wording (used with a money amount to flag offers on otherwise approved pages).
+giveaway_words:
+  en: [giveaway, give-away, giving away, lottery, prize, winner, you won, reward, gift, free cash, congratulations]
+  ar: [هدية, جائزة, ربحت, فزت, يانصيب, مكافأة, مبروك]
+
+# Common words: reusing them in another domain is NOT impersonation of a specific organisation.
+generic_labels: [police, housing, news, bank, media, office, health, visa, government, service, services,
+  portal, online, payment, payments, pay, fines, fine, traffic, transport, water, electricity, energy, tax,
+  customs, immigration, labour, labor, court, courts, ministry, authority, council, education, school,
+  university, hospital, post, mail, login, secure, account, support, info, official, national, federal,
+  emirates, arabia, gulf, dubai, abudhabi, sharjah]
+
+# Government zones: hosts here are authenticated ONLY through the official registry; popularity
+# (the Tranco reputation path) never makes them SAFE.
+government_zones: [gov.ae, mil.ae, abudhabi, dubai, gov, mil]
+
+# Letters from other alphabets that look like Latin letters (homograph detection).
+confusables:
+  "а": "a"
+  "е": "e"
+  "о": "o"
+  "р": "p"
+  "с": "c"
+  "у": "y"
+  "х": "x"
+  "і": "i"
+  "ѕ": "s"
+  "ԁ": "d"
+  "ց": "g"
+  "һ": "h"
+  "ј": "j"
+  "ԛ": "q"
+  "т": "t"
+  "ν": "v"
+  "ο": "o"
+  "α": "a"
+  "ρ": "p"
+  "τ": "t"
+  "ε": "e"
+  "χ": "x"
+  "κ": "k"
+  "μ": "m"
+  "β": "b"
+  "ι": "i"
+  "η": "n"
+  "υ": "u"
+  "ζ": "z"
+  "ı": "i"
+  "ſ": "s"
+  "ƒ": "f"
+  "ℓ": "l"
+  "ɑ": "a"
+  "ɡ": "g"
+  "ϲ": "c"
+  "ө": "o"
+
+# Fallback multi-label suffixes — used ONLY if the Public Suffix List cannot be loaded.
+fallback_multi_suffixes: [co.ae, com.ae, net.ae, org.ae, gov.ae, ac.ae, sch.ae, co.uk, org.uk, gov.uk, ac.uk, com.au, net.au, co.nz, com.sa, com.qa, com.kw, com.bh, com.om, com.eg, com.jo, com.tr, com.br, com.mx, com.sg, com.my, com.ph, com.pk, com.hk, com.cn, com.tw, co.jp, co.kr, co.in, co.id, co.th, co.za, com.ua, com.ru, com.pl, com.es, com.pt]
+
+# Form field names / placeholders that reveal what a page collects (page inspection, markup only).
+# Regular expressions, case-insensitive; matched against name, id, placeholder, autocomplete, aria-label.
+form_fields:
+  otp: ['otp', 'one.?time', 'verification.?code', 'sms.?code', 'pin\b', 'passcode', 'رمز']
+  card: ['card.?(num|no)', 'cc.?(num|number)', 'cvv', 'cvc', 'csc', 'expir', 'exp.?(date|month|year)', 'cardholder']
+  iban: ['iban', 'account.?(num|no)']
+  identity: ['emirates.?id', 'eid\b', 'passport', 'national.?id', 'هوية']
+
+# Established-website SAFE path (non-government sites that are neither in the registry nor in the
+# worldwide ranking). SAFE only when ALL of these hold — age is one factor, never enough on its own:
+#  * age: RDAP registration ≥ min_registration_age_days, OR — only when the registry publishes no RDAP
+#    registration date (e.g. .ae) — HTTPS in use (Certificate Transparency) ≥ min_in_use_days.
+#    A known but YOUNG registration date always wins over an old certificate history (re-registered
+#    expired domains keep the old certificates);
+#  * the page was retrieved over HTTPS and did not redirect to another site;
+#  * no threat-feed listing for the URL or host;
+#  * no warning sign at all, except the purely structural ones listed in allowed_signals;
+#  * not a government zone, not a shared platform, not a government registry organisation.
+established_site:
+  min_registration_age_days: 730
+  min_in_use_days: 1095
+  rdap_statuses_allowing_in_use_history: [no_rdap_service, no_registration_event]
+  allowed_signals: [lexical.path_depth]

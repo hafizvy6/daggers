@@ -47,6 +47,7 @@ class _Scored:
     detail: str
     excerpt: str
     role: str = "decisive"
+    attributes: dict | None = None
 
 
 # ---------------------------------------------------------------- selection
@@ -119,6 +120,7 @@ def _evidence(scored: _Scored, role: str | None = None) -> EvidenceItem:
         content_hash=scored.record.content_hash,
         detail=scored.detail,
         synthetic=scored.record.synthetic,
+        attributes=scored.attributes,
     )
 
 
@@ -231,7 +233,8 @@ def verify_claim(
             if comparison.result == UNRELATED:
                 continue
             hashes.append(record.content_hash)
-            item = _Scored(record, entry, comparison.result, comparison.detail, comparison.excerpt)
+            item = _Scored(record, entry, comparison.result, comparison.detail, comparison.excerpt,
+                           attributes=comparison.attributes)
             if entry.source_class == CLASS_C:
                 item.role = "supporting_context"
             elif comparison.result == RELATED:
@@ -264,6 +267,14 @@ def verify_claim(
     responsible_a = named_a or [
         e for e in sources if e.source_class == CLASS_A and set(e.authority_scope) & set(claim.categories)
     ]
+
+    # A claim about a NAMED authority is verified only by that authority (or a record naming it):
+    # agreement from a different authority's record is not verification of someone else's claim.
+    if claim.entity_ids and class_a and all(s.result == SUPPORTS for s in class_a) and all(
+            (s.attributes or {}).get("authority") == "differs" for s in class_a):
+        notes.append("only a different authority's record agreed with the claim; the named authority's own "
+                     "statement was not found — not verified")
+        return finish(NOT_VERIFIABLE, class_a)
 
     if class_a:
         stances = {s.result for s in class_a}

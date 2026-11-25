@@ -9,9 +9,7 @@ from backend.tests.ws2 import helpers
 from backend.app.channels import privacy, urls
 from backend.app.channels.guard import GuardSync, build_blocklist, render
 from backend.app.channels.http_client import ProviderError
-from backend.app.channels.maps import (
-    Listing, MapsChannel, NominatimProvider, default_maps_providers, parse_nominatim,
-)
+from backend.app.channels.maps import Listing, MapsChannel
 from backend.app.channels.search import (
     DuckDuckGoProvider, SearchChannel, SerperProvider, TTLCache, default_providers, parse_ddg_html,
 )
@@ -123,61 +121,6 @@ class TestSearch(unittest.TestCase):
         self.assertEqual(unconfigured.source_kind, "unconfigured")
         self.assertEqual(unconfigured.results, [])
 
-class TestNominatim(unittest.TestCase):
-    PAYLOAD = [
-        {"osm_type": "node", "osm_id": 1, "name": "Test Police Centre",
-         "display_name": "Test Police Centre, Al Reem Island, Abu Dhabi",
-         "type": "police", "class": "amenity",
-         "extratags": {"phone": "+971 2 555 0000", "website": "adpolice.gov.ae"}},
-        {"osm_type": "way", "osm_id": 2, "name": "No Tags Listing",
-         "display_name": "No Tags Listing, Dubai", "type": "cafe", "class": "amenity"},
-        {"osm_type": "node", "osm_id": 3, "name": "", "display_name": ", Sharjah", "type": "x"},
-    ]
-
-    def test_parse_maps_extratags_and_scheme(self):
-        listings = parse_nominatim(self.PAYLOAD, 10)
-        self.assertEqual(len(listings), 2)  # nameless item is dropped
-        first = listings[0]
-        self.assertEqual(first.provider, "openstreetmap")
-        self.assertEqual(first.place_id, "N/1")
-        self.assertEqual(first.website, "https://adpolice.gov.ae")
-        self.assertEqual(first.phone, "+971 2 555 0000")
-        self.assertEqual(first.source_kind, "live")
-        self.assertEqual(first.business_status, "")  # unknown stays unknown
-        second = listings[1]
-        self.assertIsNone(second.website)
-        self.assertIsNone(second.phone)
-
-    def test_provider_builds_query_and_parses(self):
-        seen = {}
-        def fake_http(url, **kw):
-            seen["url"] = url
-            return json.dumps(self.PAYLOAD).encode()
-        listings = NominatimProvider(http=fake_http).search("شرطة أبوظبي", "ar", 10)
-        self.assertIn("countrycodes=ae", seen["url"])
-        self.assertIn("accept-language=ar", seen["url"])
-        self.assertEqual(len(listings), 2)
-
-    def test_provider_chain_keyless_and_keyed(self):
-        self.assertEqual(default_maps_providers({}), [])
-        keyless = [p.name for p in default_maps_providers({"MAPS_LIVE_ENABLED": "1"})]
-        self.assertEqual(keyless, ["openstreetmap"])
-        keyed = [p.name for p in default_maps_providers({"MAPS_LIVE_ENABLED": "1", "GOOGLE_PLACES_API_KEY": "k"})]
-        self.assertEqual(keyed, ["google_places", "openstreetmap"])
-
-    def test_nominatim_listing_flows_through_assess(self):
-        def fake_http(url, **kw):
-            return json.dumps(self.PAYLOAD).encode()
-        channel = MapsChannel(prod_scorer(), providers=[NominatimProvider(http=fake_http)])
-        result = channel.run("police centre abu dhabi")
-        self.assertEqual(result["source_kind"], "live")
-        self.assertEqual(len(result["listings"]), 2)
-        listing = result["listings"][0]
-        self.assertEqual(listing["listing"]["provider"], "openstreetmap")
-        self.assertIn("identity", listing["checks"])
-        self.assertIn("phone", listing["checks"])
-        self.assertEqual(listing["checks"]["website"]["status"], "checked")
-
 
 class TestMaps(unittest.TestCase):
     def setUp(self):
@@ -224,7 +167,7 @@ class TestSweep(unittest.TestCase):
         service, events = self.make(allow_arbitrary=False)
         run = service.run(channel="web", query_id="web-adpolice-fines", client="1.1.1.1")
         self.assertEqual(run["store"], "memory-temporary")
-        self.assertFalse(run["synthetic"])
+        self.assertTrue(run["synthetic"])  # the unit-test double declares itself synthetic
         self.assertEqual(sum(run["counts"].values()), len(run["results"]))
         self.assertEqual(service.get(run["id"])["results"], run["results"])
         self.assertEqual(events[0][0], "sweep")
@@ -240,11 +183,11 @@ class TestSweep(unittest.TestCase):
             store=InMemorySweepStore(),
         )
         web = service.run(channel="web", query_id="web-adpolice-fines")
-        self.assertEqual(web["source_kind"], "unconfigured")
+        self.assertEqual(web["status"], "failed")   # honest failure, never sample results
         self.assertEqual(web["results"], [])
-        self.assertIn("no live provider configured", " ".join(web["errors"]))
+        self.assertIn("no live provider configured", web["error"])
         maps = service.run(channel="maps")
-        self.assertEqual(maps["source_kind"], "unconfigured")
+        self.assertEqual(maps["status"], "failed")
         self.assertEqual(maps["results"], [])
 
     def test_arbitrary_queries_need_opt_in_and_no_pii(self):
@@ -283,6 +226,8 @@ class TestSweep(unittest.TestCase):
             def create_sweep_run(self, **kw): return {"id": 1, **kw, "created_at": "x"}
             def add_sweep_results(self, run_id, rows): pass
             def get_sweep_run(self, run_id): return None
+            def update_sweep_run(self, run_id, **fields): pass
+            def list_sweep_runs(self, limit=50): return []
 
         self.assertIsInstance(make_store(Repo()), RepoSweepStore)
 

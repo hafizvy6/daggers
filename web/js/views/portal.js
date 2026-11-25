@@ -1,15 +1,18 @@
-/* Daggers · Portal — the police dashboard (plan Scenario 7).
-   Reports table · detail pane · AI Analysis streams EN → AR toggle →
-   takedown letter. Evidence-only; no canned cases. */
+/* Daggers · Police Portal — the investigator's workspace.
+   All findings (Checker, investigations, radar, sweeps) with search + filters ·
+   investigations · reports with AI analysis and takedown drafts · operations.
+   Every number and row here comes from the live database. */
 import { t, fmtNum, fmtDateTime, timeAgo, getLang, reasonsOf } from "../i18n/i18n.js";
-import { getReports, advanceReport, streamAnalysis, getTakedown, tagFor, state } from "../api.js";
+import { getReports, advanceReport, streamAnalysis, getTakedown, tagFor, state, can, AuthError,
+  investigate, getInvestigations, listSweeps, getGuardSync, getAudit, logout, searchFindings } from "../api.js";
 import { el, tagChip, chip, reasonChip } from "../components/tag.js";
 import { evidenceFrame } from "../components/evidence.js";
 import { toast } from "../components/toast.js";
 import { emptyState, errorCard } from "../components/empty.js";
 import { cardsSkeleton } from "../components/skeleton.js";
-import { pageHead, card, kv } from "./_shared.js";
+import { pageHead, card, kv, authGate } from "./_shared.js";
 import { icons } from "../components/icons.js";
+import { sourceLabel } from "../components/analysis.js";
 
 const STATUS_ORDER = ["QUEUED", "SUBMITTED", "SEEN"];
 
@@ -31,10 +34,16 @@ export default async function Portal(ctx) {
 
   try {
     reports = await getReports();
-  } catch {
+  } catch (err) {
+    if (err instanceof AuthError) {
+      split.replaceWith(authGate(err));
+      return root;
+    }
     tableHost.replaceChildren(errorCard({ title: t("common.errorTitle"), body: t("common.errorBody") }));
     return root;
   }
+  if (state.user) root.insertBefore(workspace(), statsHost);
+  root.insertBefore(el("h2", { text: t("portal.reportsTitle") }), statsHost);
   if (!reports.length) {
     tableHost.replaceChildren(emptyState({ title: t("portal.emptyTitle"), body: t("portal.emptyBody") }));
     detailHost.append(emptyState({ title: t("portal.selectTitle"), body: t("portal.selectBody") }));
@@ -97,7 +106,7 @@ export default async function Portal(ctx) {
           el("span", { class: "ltr", text: r.domain || r.evidence?.domain || "—" }),
           r.auto ? el("span", { class: "auto-chip", text: t("portal.auto") }) : null,
           el("span", { class: "cell-sub mono ltr", text: r.filed_at ? timeAgo(r.filed_at) : "—" })),
-        el("td", {}, tagChip(tagFor(r.evidence?.verdict || "MALICIOUS"))),
+        el("td", {}, tagChip(tagFor(r.evidence || r))),
         el("td", {}, stepper(r.status, true)),
         el("td", { class: "mono ltr", text: fmtNum(r.blocked_hits ?? 0) }),
       );
@@ -121,7 +130,7 @@ export default async function Portal(ctx) {
     detailHost.replaceChildren();
     if (!r) return;
     const ev = r.evidence || {};
-    const tagKey = tagFor(ev.verdict || "MALICIOUS");
+    const tagKey = tagFor(ev);
 
     const head = el("section", { class: "card" });
     head.append(
@@ -216,8 +225,8 @@ export default async function Portal(ctx) {
     const takeHost = el("div");
     node.append(out, actions, takeHost);
 
-    const cacheKey = `daggers.ai.${r.id}`;
-    const savedAI = (() => { try { return JSON.parse(localStorage.getItem(cacheKey) || "null"); } catch { return null; } })();
+    // The stored analysis comes from the server (report.ai); nothing is kept on the device.
+    const savedAI = r.ai || null;
     let result = savedAI;
 
     function paintResult(lang) {
@@ -268,18 +277,15 @@ export default async function Portal(ctx) {
         });
         result = final;
         out.classList.remove("is-streaming");
-        try { localStorage.setItem(cacheKey, JSON.stringify(final)); } catch { /* quota */ }
         paintResult("en");
         runBtn.disabled = false;
       } catch (err) {
         out.classList.remove("is-streaming");
         if (err?.name === "AbortError") { runBtn.disabled = false; return; }
-        // network-pull mid-stream: keep what we typed, finish with the template
-        const { getFallback } = await import("./portal_fallback.js");
-        const fb = await getFallback(r.id, typed);
-        result = fb;
-        try { localStorage.setItem(cacheKey, JSON.stringify(fb)); } catch { /* quota */ }
-        paintResult("en");
+        if (err instanceof AuthError) { out.replaceWith(authGate(err)); runBtn.disabled = false; return; }
+        // The stream failed: say so. Partial text is kept but marked incomplete; nothing is substituted.
+        out.textContent = typed ? `${typed}\n\n${t("portal.aiIncomplete")}` : t("portal.aiFailed");
+        badgeHost.replaceChildren(el("span", { class: "ai-badge is-fallback", text: t("portal.aiFailedTag") }));
         toast(t("portal.aiStreamDied"), { kind: "bad" });
         runBtn.disabled = false;
       }
@@ -335,4 +341,224 @@ export default async function Portal(ctx) {
   if (state.offline) root.prepend(el("div", { class: "note", style: "margin-block-end:var(--s4)" }, el("span", { text: "⊘" }), el("span", { text: t("portal.offlineNote") })));
 
   return root;
+}
+
+/* ---------------- Investigations + operations (live, signed-in) ------- */
+function workspace() {
+  const host = el("div", { class: "stack", style: "margin-block-end:var(--s4)" });
+  const signOut = el("button", { class: "btn btn-sm", type: "button", text: t("auth.signOut") });
+  signOut.addEventListener("click", async () => { await logout(); location.hash = "#/login"; });
+  host.append(state.user.local
+    ? el("div", { class: "note note-teal" }, el("span", { text: "i" }), el("span", { text: t("auth.localAccess") }))
+    : el("div", { class: "row", style: "justify-content:space-between" },
+      el("span", { class: "muted", text: t("auth.signedInAs", { user: state.user.username, role: t(`auth.role_${state.user.role}`) }) }),
+      signOut));
+
+  host.append(findingsIndex());
+
+  const invList = el("div", { class: "card flush" }, cardsSkeleton(1));
+  if (can("investigator")) host.append(investigateForm());
+  else host.append(el("div", { class: "note" }, el("span", { text: "i" }), el("span", { text: t("inv.needInvestigator") })));
+  host.append(el("h2", { text: t("inv.listTitle") }), invList);
+  paintInvestigations(invList);
+
+  const ops = el("div", { class: "grid-2", style: "align-items:start" });
+  host.append(el("h2", { text: t("ops.title") }), ops);
+  paintOps(ops);
+  return host;
+}
+
+function investigateForm() {
+  const urlIn = el("input", { class: "input", id: "invUrl", type: "url", dir: "ltr", required: true,
+    maxlength: "2048", placeholder: t("inv.urlPlaceholder") });
+  const textIn = el("textarea", { class: "textarea", id: "invText", dir: "auto", maxlength: "8000", rows: "3" });
+  const msg = el("p", { class: "field-hint", role: "alert" });
+  const btn = el("button", { class: "btn btn-primary", type: "submit", text: t("inv.submit") });
+  const form = el("form", { class: "stack", novalidate: true },
+    el("div", { class: "field" }, el("label", { for: "invUrl", text: t("inv.urlLabel") }), urlIn),
+    el("div", { class: "field" }, el("label", { for: "invText", text: t("inv.textLabel") }), textIn,
+      el("span", { class: "field-hint", text: t("inv.textHint") })),
+    el("div", { class: "row" }, btn), msg);
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!urlIn.value.trim()) return;
+    btn.disabled = true; btn.textContent = t("inv.submitting"); msg.textContent = "";
+    try {
+      const finding = await investigate(urlIn.value.trim(), textIn.value.trim());
+      location.hash = `#/finding/${finding.id}`;
+    } catch (err) {
+      msg.textContent = err instanceof AuthError ? t("auth.forbiddenBody") : err?.status === 422 ? t("inv.invalid") : t("inv.error");
+      btn.disabled = false; btn.textContent = t("inv.submit");
+    }
+  });
+  return card(t("inv.title"), t("inv.kicker"), form);
+}
+
+async function paintInvestigations(host) {
+  let rows = [];
+  try { rows = await getInvestigations(); } catch (err) {
+    host.replaceChildren(err instanceof AuthError ? authGate(err) : errorCard({ title: t("common.errorTitle"), body: t("common.errorBody") }));
+    return;
+  }
+  if (!rows.length) { host.replaceChildren(emptyState({ title: t("inv.empty"), body: "" })); return; }
+  const table = el("table", { class: "table" });
+  table.append(el("thead", {}, el("tr", {},
+    el("th", { text: t("inv.colId") }), el("th", { text: t("inv.colDomain") }), el("th", { text: t("inv.colTag") }),
+    el("th", { text: t("inv.colVerification") }), el("th", { text: t("inv.colWhen") }))));
+  const tbody = el("tbody");
+  rows.slice(0, 25).forEach((f) => {
+    const gov = f.gov_verification?.status;
+    const tr = el("tr", { tabindex: "0" },
+      el("td", { class: "mono" }, el("a", { href: `#/finding/${f.id}`, text: `#${f.id}` })),
+      el("td", { class: "ltr", text: f.domain }),
+      el("td", {}, tagChip(tagFor(f))),
+      el("td", { text: gov ? t(`trust.gov_${gov}`) : "—" }),
+      el("td", { class: "mono ltr", text: f.created_at ? timeAgo(f.created_at) : "—" }));
+    tr.addEventListener("keydown", (e) => { if (e.key === "Enter") location.hash = `#/finding/${f.id}`; });
+    tbody.append(tr);
+  });
+  table.append(tbody);
+  host.replaceChildren(el("div", { class: "table-wrap" }, table));
+}
+
+async function paintOps(host) {
+  const sweepsCard = card(t("ops.sweepRuns"), "", cardsSkeleton(1));
+  const guardCard = card(t("ops.guardSync"), "", cardsSkeleton(1));
+  host.append(sweepsCard, guardCard);
+  try {
+    const runs = await listSweeps();
+    const body = runs.length ? el("div", { class: "table-wrap" }, el("table", { class: "table" },
+      el("thead", {}, el("tr", {}, el("th", { text: t("ops.colRun") }), el("th", { text: t("ops.colQuery") }),
+        el("th", { text: t("ops.colStatus") }), el("th", { text: t("ops.colResults") }))),
+      el("tbody", {}, ...runs.slice(0, 10).map((r) => el("tr", {},
+        el("td", { class: "mono", text: `#${r.id}` }),
+        el("td", { dir: "auto", text: r.query }),
+        el("td", { text: `${t(`ops.status_${r.status || "completed"}`)}${r.source_kind ? " · " + t(`ops.kind_${r.source_kind}`) : ""}` }),
+        el("td", { class: "mono ltr", text: String(r.result_count ?? 0) })))))) : el("p", { class: "muted", text: t("ops.noRuns") });
+    sweepsCard.lastChild.replaceWith(body);
+  } catch { sweepsCard.lastChild.replaceWith(el("p", { class: "muted", text: t("common.errorBody") })); }
+  try {
+    const g = await getGuardSync();
+    guardCard.lastChild.replaceWith(el("div", { class: "stack" },
+      el("p", { text: t("ops.blocked", { n: fmtNum(g.blocked_domains ?? 0) }) }),
+      el("p", { class: "muted", text: t("ops.syncState", { state: g.status }) }),
+      el("p", { class: "muted", style: "font-size:var(--fs-xs)", text: t("ops.notMeasured") })));
+  } catch { guardCard.lastChild.replaceWith(el("p", { class: "muted", text: t("common.errorBody") })); }
+  if (can("admin")) {
+    const auditCard = card(t("ops.auditTitle"), "", cardsSkeleton(1));
+    host.append(auditCard);
+    try {
+      const entries = await getAudit();
+      auditCard.lastChild.replaceWith(entries.length ? el("div", { class: "table-wrap" }, el("table", { class: "table" },
+        el("thead", {}, el("tr", {}, el("th", { text: t("ops.colAt") }), el("th", { text: t("ops.colUser") }),
+          el("th", { text: t("ops.colAction") }), el("th", { text: t("ops.colOutcome") }))),
+        el("tbody", {}, ...entries.slice(0, 20).map((a) => el("tr", {},
+          el("td", { class: "mono ltr", text: timeAgo(a.at) }), el("td", { class: "ltr", text: a.username || "—" }),
+          el("td", { class: "mono ltr", text: a.action }), el("td", { text: a.outcome })))))) : el("p", { class: "muted", text: t("ops.auditEmpty") }));
+    } catch { auditCard.lastChild.replaceWith(el("p", { class: "muted", text: t("common.errorBody") })); }
+  }
+}
+
+/* ---------------- All findings: search + filters (live database) -------- */
+const PAGE = 25;
+
+function findingsIndex() {
+  const saved = (() => { try { return JSON.parse(sessionStorage.getItem("daggers:portalFilters") || "{}"); } catch { return {}; } })();
+  const filters = { q: "", tag: "", input_type: "", source: "", date_from: "", date_to: "", offset: 0, ...saved };
+
+  const q = el("input", { class: "input", id: "fQ", type: "search", dir: "auto", maxlength: "200",
+    placeholder: t("portal.findPlaceholder"), value: filters.q });
+  const sel = (id, name, options) => {
+    const s = el("select", { class: "select", id });
+    for (const [value, key] of options) {
+      const o = el("option", { value, text: t(key) });
+      if (filters[name] === value) o.selected = true;
+      s.append(o);
+    }
+    return s;
+  };
+  const tagSel = sel("fTag", "tag", [["", "portal.anyVerdict"], ["FAKE", "common.tagFake"], ["MISLEADING", "common.tagMisleading"],
+    ["WARNING", "common.tagWarning"], ["SAFE", "common.tagSafe"]]);
+  const typeSel = sel("fType", "input_type", [["", "portal.anyType"], ["url", "analysis.type_url"], ["text", "analysis.type_text"],
+    ["domain", "analysis.type_domain"]]);
+  const srcSel = sel("fSource", "source", [["", "portal.anySource"], ["checker", "analysis.src_checker"],
+    ["investigation", "analysis.src_investigation"], ["sweep", "analysis.src_sweep"], ["crt", "analysis.src_crt"],
+    ["feeds", "analysis.src_feeds"], ["radar", "analysis.src_radar"]]);
+  const from = el("input", { class: "input", id: "fFrom", type: "date", value: filters.date_from });
+  const to = el("input", { class: "input", id: "fTo", type: "date", value: filters.date_to });
+  const field = (id, key, ctrl) => el("div", { class: "field" }, el("label", { for: id, text: t(key) }), ctrl);
+  const apply = el("button", { class: "btn btn-primary", type: "submit", text: t("portal.applyFilters") });
+  const reset = el("button", { class: "btn btn-ghost", type: "button", text: t("portal.resetFilters") });
+  const form = el("form", { class: "filters", role: "search" },
+    field("fQ", "portal.findLabel", q), field("fTag", "portal.colTag", tagSel), field("fType", "analysis.inputType", typeSel),
+    field("fSource", "common.source", srcSel), field("fFrom", "portal.dateFrom", from), field("fTo", "portal.dateTo", to),
+    el("div", { class: "row" }, apply, reset));
+
+  const summary = el("p", { class: "muted", role: "status", style: "font-size:var(--fs-sm); margin:0" });
+  const tableHost = el("div", { class: "card flush", id: "findingsTable" }, cardsSkeleton(1));
+  const pager = el("div", { class: "pager" });
+  const box = el("section", { class: "stack", id: "portalFindings" },
+    el("h2", { text: t("portal.findingsTitle") }),
+    el("p", { class: "muted", style: "margin:0", text: t("portal.findingsNote") }),
+    el("div", { class: "card" }, form), summary, tableHost, pager);
+
+  const read = () => {
+    filters.q = q.value.trim(); filters.tag = tagSel.value; filters.input_type = typeSel.value;
+    filters.source = srcSel.value; filters.date_from = from.value; filters.date_to = to.value;
+  };
+  form.addEventListener("submit", (e) => { e.preventDefault(); read(); filters.offset = 0; load(); });
+  reset.addEventListener("click", () => {
+    q.value = ""; tagSel.value = ""; typeSel.value = ""; srcSel.value = ""; from.value = ""; to.value = "";
+    read(); filters.offset = 0; load();
+  });
+
+  async function load() {
+    try { sessionStorage.setItem("daggers:portalFilters", JSON.stringify(filters)); } catch { /* private mode */ }
+    tableHost.replaceChildren(cardsSkeleton(1));
+    let data;
+    try {
+      data = await searchFindings({ ...filters, limit: PAGE });
+    } catch (err) {
+      tableHost.replaceChildren(err instanceof AuthError ? authGate(err)
+        : errorCard({ title: t("common.errorTitle"), body: t("portal.findingsError") }));
+      summary.textContent = ""; pager.replaceChildren();
+      return;
+    }
+    const facets = data.facets?.tag || {};
+    summary.textContent = t("portal.findingsCount", { n: fmtNum(data.total) }) + "  ·  " +
+      ["FAKE", "MISLEADING", "WARNING", "SAFE"].map((k) => `${t(`common.tag${k[0]}${k.slice(1).toLowerCase()}`)} ${fmtNum(facets[k] || 0)}`).join(" · ");
+    if (!data.findings.length) {
+      tableHost.replaceChildren(emptyState({ title: t("portal.noFindings"), body: t("portal.noFindingsBody") }));
+      pager.replaceChildren();
+      return;
+    }
+    const table = el("table", { class: "table", id: "findingsTableEl" });
+    table.append(el("thead", {}, el("tr", {},
+      el("th", { text: t("inv.colId") }), el("th", { text: t("portal.colTag") }), el("th", { text: t("analysis.inputType") }),
+      el("th", { text: t("portal.colSubject") }), el("th", { text: t("common.source") }), el("th", { text: t("inv.colWhen") }))));
+    const tbody = el("tbody");
+    for (const f of data.findings) {
+      const subject = f.submitted_input || f.submitted_url || f.domain || "—";
+      const tr = el("tr", { tabindex: "0", "data-finding": String(f.id) },
+        el("td", { class: "mono" }, el("a", { href: `#/finding/${f.id}`, text: `#${f.id}` })),
+        el("td", {}, tagChip(tagFor(f))),
+        el("td", { text: t(`analysis.type_${f.input_type || "domain"}`) }),
+        el("td", { class: "col-domain", dir: "auto", title: subject, text: subject.length > 90 ? subject.slice(0, 90) + "…" : subject }),
+        el("td", { text: sourceLabel(f) }),
+        el("td", { class: "mono ltr", title: fmtDateTime(f.created_at || f.first_seen), text: timeAgo(f.created_at || f.first_seen) }));
+      tr.addEventListener("click", (e) => { if (!e.target.closest("a")) location.hash = `#/finding/${f.id}`; });
+      tr.addEventListener("keydown", (e) => { if (e.key === "Enter") location.hash = `#/finding/${f.id}`; });
+      tbody.append(tr);
+    }
+    table.append(tbody);
+    tableHost.replaceChildren(el("div", { class: "table-wrap" }, table));
+    const prev = el("button", { class: "btn btn-sm", type: "button", text: t("portal.prev"), disabled: filters.offset === 0 });
+    const next = el("button", { class: "btn btn-sm", type: "button", text: t("portal.next"),
+      disabled: filters.offset + PAGE >= data.total });
+    prev.addEventListener("click", () => { filters.offset = Math.max(0, filters.offset - PAGE); load(); });
+    next.addEventListener("click", () => { filters.offset += PAGE; load(); });
+    pager.replaceChildren(el("span", { class: "muted mono", text: `${filters.offset + 1}–${Math.min(filters.offset + PAGE, data.total)} / ${data.total}` }), prev, next);
+  }
+  load();
+  return box;
 }

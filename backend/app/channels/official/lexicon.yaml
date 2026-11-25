@@ -1,4 +1,4 @@
-# Daggers — bilingual claim lexicon (deterministic; no AI matching).
+# Daggers WS2 — bilingual claim lexicon (deterministic; no AI matching).
 # Terms are matched as whole tokens after Arabic/English normalization
 # (diacritics, tatweel, Alef/Ya, Arabic-Indic digits). Arabic proclitics
 # (و ب ل ال) are tolerated by the matcher.
@@ -24,13 +24,17 @@ categories:
   traffic:
     en: [traffic fine, traffic fines, black points, fine discount, speeding, impounded]
     ar: [مخالفة مرورية, مخالفات مرورية, النقاط السوداء, خصم المخالفات, حجز المركبة]
+  legal:
+    en: [penalty, penalties, mandatory, legal requirement, required by law, regulation, regulations, violation, liable, prosecution]
+    ar: [عقوبة, عقوبات, الزامي, الزامية, لائحة, مخالفة قانونية, ملاحقة قانونية, مسؤولية قانونية]
   announcement:
     en: [announces, announced, announcement, launches, launched, decision, decree, new law, resolution, circular, initiative]
     ar: [تعلن, اعلنت, اعلان, تطلق, اطلقت, قرار, مرسوم, قانون جديد, تعميم, مبادرة]
 
 # Regulated categories: Class B media alone cannot establish their legal or
 # current validity when a responsible Class A authority is available.
-regulated_categories: [fees, financial_aid, immigration, traffic, giveaway]
+# Legal, fee, benefit (financial_aid) and service (immigration, traffic) claims need fresh Class A evidence.
+regulated_categories: [fees, financial_aid, immigration, traffic, giveaway, legal]
 
 # Cross-lingual concepts: what the claim is about, independent of language.
 concepts:
@@ -73,3 +77,13 @@ denial_markers:
 supersession_markers:
   en: [replaces, supersedes, updated, amended, revised, no longer, cancelled, extended]
   ar: [يحل محل, تعديل, معدل, محدث, الغاء, تمديد, لم يعد]
+
+# Places a claim may name → registry jurisdiction id (claim jurisdiction check). EN + AR.
+places:
+  dubai: [dubai, دبي]
+  abu_dhabi: [abu dhabi, abudhabi, ابوظبي, ابو ظبي]
+  sharjah: [sharjah, الشارقة]
+  ajman: [ajman, عجمان]
+  ras_al_khaimah: [ras al khaimah, رأس الخيمة, راس الخيمة]
+  fujairah: [fujairah, الفجيرة]
+  umm_al_quwain: [umm al quwain, ام القيوين]

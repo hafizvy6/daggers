@@ -1,0 +1,81 @@
+# Hosts that are POPULAR but serve content that ANYONE can publish (forms, file shares, site
+# builders, link shorteners, paste/tunnel services). A top-sites rank says nothing about a page on
+# them, so the reputation path NEVER makes them SAFE — they get the normal analysis (WARNING at best).
+#
+# This list only REMOVES SAFE; it can never grant it. Platforms that give users their own
+# sub-domains (github.io, blogspot.com, web.app, …) are already covered by the PRIVATE section of
+# the Public Suffix List (public_suffix_list.dat) and do not need to be repeated here.
+#
+#   hosts:   exact host names (a sub-domain of them is NOT excluded unless listed)
+#   domains: the domain AND every sub-domain of it
+hosts:
+  - docs.google.com          # Google Forms / Docs
+  - forms.gle
+  - sites.google.com
+  - drive.google.com
+  - storage.googleapis.com
+  - script.google.com
+  - forms.office.com
+  - forms.microsoft.com
+  - onedrive.live.com
+  - sway.office.com
+  - raw.githubusercontent.com
+  - gist.github.com
+  - gist.githubusercontent.com
+  - web.archive.org
+  - translate.goog
+domains:
+  # link shorteners — the destination is unknown
+  - bit.ly
+  - t.co
+  - tinyurl.com
+  - goo.gl
+  - ow.ly
+  - is.gd
+  - buff.ly
+  - cutt.ly
+  - rebrand.ly
+  - shorturl.at
+  - rb.gy
+  - s.id
+  - t.ly
+  - lnkd.in
+  - 1drv.ms
+  - linktr.ee
+  # file sharing / transfer
+  - dropbox.com
+  - dropboxusercontent.com
+  - wetransfer.com
+  - we.tl
+  - mediafire.com
+  - mega.nz
+  - box.com
+  - sharepoint.com
+  - 4shared.com
+  # site / form builders and paste / publish services
+  - weebly.com
+  - wix.com
+  - jotform.com
+  - typeform.com
+  - formstack.com
+  - surveymonkey.com
+  - notion.site
+  - canva.site
+  - telegra.ph
+  - pastebin.com
+  - medium.com
+  - substack.com
+  - wordpress.com
+  - godaddysites.com
+  - squarespace.com
+  - webflow.io
+  - glitch.me
+  - replit.dev
+  - repl.co
+  - ipfs.io
+  # tunnels / dynamic DNS
+  - ngrok.app
+  - trycloudflare.com
+  - serveo.net
+  - no-ip.com
+  - ddns.net

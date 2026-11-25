@@ -1,9 +1,9 @@
 /* Daggers · Sweep — Web/Maps tabs, EN/AR query pills, progressive scoring
    (plan Scenario 4 + 11). Rows light up one by one; bad rows go red with why. */
 import { t, reasonsOf } from "../i18n/i18n.js";
-import { getSweep, getExamples, tagFor } from "../api.js";
+import { getSweep, getExamples, tagFor, AuthError, state } from "../api.js";
 import { el, tagChip, chip } from "../components/tag.js";
-import { pageHead, card } from "./_shared.js";
+import { pageHead, card, authGate } from "./_shared.js";
 import { icons } from "../components/icons.js";
 import { emptyState, errorCard } from "../components/empty.js";
 
@@ -30,24 +30,18 @@ export default async function Sweep() {
     el("span", { html: icons.sweep({ size: 18 }) }), el("span", { text: t("sweep.run") }));
   const pills = el("div", { class: "pill-row" });
   let querySets = { web: [], maps: [] };
-  let arbitraryAllowed = false;
   getExamples().then((ex) => {
     querySets = { web: ex.sweep_web || [], maps: ex.sweep_maps || [] };
-    arbitraryAllowed = !!ex.sweep_arbitrary;
-    queryInput.placeholder = arbitraryAllowed ? t("sweep.emptyQuery") : t("sweep.freeTextOffPlaceholder");
     paintQueries();
-  }).catch(() => { queryInput.placeholder = t("sweep.emptyQuery"); });
+  }).catch(() => { /* offline with no cache: type your own query */ });
   function paintQueries() {
     const list = channel === "maps" ? querySets.maps : querySets.web;
-    const buttons = list.map((x) => {
+    pills.replaceChildren(...list.map((x) => {
       const p = el("button", { class: "query-pill", type: "button" },
         el("span", { class: "pill-lang", text: x.lang.toUpperCase() }), el("span", { text: x.q }));
-      p.addEventListener("click", () => { queryInput.value = x.q; runSweep(x.q, x.query_id); });
+      p.addEventListener("click", () => { queryInput.value = x.q; runSweep(x.q); });
       return p;
-    });
-    pills.replaceChildren(...(buttons.length ? buttons : [
-      el("span", { class: "muted", style: "font-size:var(--fs-xs)", text: t("sweep.noQueries") }),
-    ]));
+    }));
   }
   const controls = card(null, "",
     el("div", { class: "stack" },
@@ -61,9 +55,8 @@ export default async function Sweep() {
 
   const resultsHost = el("div", { class: "stack" });
   const resultsCard = el("div", { class: "card flush" }, resultsHost);
-  const afterHost = el("div", { class: "stack" });
 
-  root.append(controls, el("h2", { style: "margin-block-start:var(--s4)", id: "sweepResultsTitle", text: t("sweep.resultsTitle") }), resultsCard, afterHost);
+  root.append(controls, el("h2", { style: "margin-block-start:var(--s4)", id: "sweepResultsTitle", text: t("sweep.resultsTitle") }), resultsCard);
 
   function emptyPanel() {
     return emptyState({
@@ -72,90 +65,57 @@ export default async function Sweep() {
   }
   resultsHost.replaceChildren(emptyPanel());
 
-  async function runSweep(query, queryId) {
+  async function runSweep(query) {
     if (running) return;
     running = true;
     runBtn.disabled = true;
     runBtn.lastChild.textContent = t("sweep.running");
-    afterHost.replaceChildren();
     let data;
     try {
-      data = await getSweep(channel === "maps" ? "maps" : "web", query, queryId);
+      data = await getSweep(channel === "maps" ? "maps" : "web", query);
     } catch (err) {
-      let card_;
-      if (err?.status === 403) {
-        card_ = emptyState({ title: t("sweep.freeTextOffTitle"), body: t("sweep.freeTextOffBody") });
-      } else if (err?.status === 429) {
-        card_ = emptyState({ title: t("sweep.rateLimitedTitle"), body: t("sweep.rateLimitedBody") });
-      } else if (err?.status === 422) {
-        card_ = emptyState({ title: t("sweep.freeTextOffTitle"), body: err.detail || t("sweep.freeTextOffBody") });
-      } else {
-        card_ = errorCard({ title: t("common.errorTitle"), body: t("common.errorBody") });
-      }
-      resultsHost.replaceChildren(card_);
+      resultsHost.replaceChildren(err instanceof AuthError
+        ? el("div", { class: "stack" }, el("p", { class: "muted", style: "padding:var(--s4)", text: t("sweepx.needLogin") }), authGate(err))
+        : errorCard({ title: t("common.errorTitle"), body: err?.message ? t("sweepx.failed", { error: err.message }) : t("common.errorBody") }));
+      running = false; runBtn.disabled = false; runBtn.lastChild.textContent = t("sweep.run");
+      return;
+    }
+    if (data.status === "failed") {
+      resultsHost.replaceChildren(errorCard({ title: t("common.errorTitle"), body: t("sweepx.failed", { error: data.error || "" }) }));
       running = false; runBtn.disabled = false; runBtn.lastChild.textContent = t("sweep.run");
       return;
     }
     if (query && !data.query) { data.query = query; }
     const meta = document.getElementById("sweepMeta");
     if (meta) meta.textContent = `${t("sweep.engine", { engine: data.engine || "—" })}${data.cached ? " · " + t("sweep.cached") : ""}`;
-    if (!data.results || data.results.length === 0) {
-      const body = data.source_kind === "unconfigured" ? t("sweep.unconfiguredBody") : t("sweep.noResultsBody");
-      const box = el("div", {}, emptyState({ title: t("sweep.emptyTitle"), body }));
-      // Surface the server's own reason — adapter errors carry only type names,
-      // never secrets. "duckduckgo: ProviderError" = egress blocked;
-      // "duckduckgo: no results" = the provider returned an empty page we could not parse.
-      if (Array.isArray(data.errors) && data.errors.length) {
-        box.append(el("p", {
-          class: "mono ltr",
-          style: "font-size:var(--fs-xs); margin:var(--s2) auto 0; max-width:64ch; text-align:center; color:var(--ink-muted); overflow-wrap:anywhere",
-          text: data.errors.join(" · "),
-        }));
-      }
-      resultsHost.replaceChildren(box);
-      running = false;
-      runBtn.disabled = false;
-      runBtn.lastChild.textContent = t("sweep.run");
-      return;
-    }
 
     const rows = el("div", { class: "sweep-results" });
     resultsHost.replaceChildren(rows);
+    if (data.synthetic || data.source_kind === "fixture") {
+      resultsHost.prepend(el("div", { class: "note", style: "margin:var(--s3)" }, el("span", { text: "i" }), el("span", { text: t("sweepx.synthetic") })));
+    }
 
-    const bad = data.results.filter((r) => tagFor(r.verdict) === "fake" || tagFor(r.verdict) === "misleading").length;
+    const bad = data.results.filter((r) => tagFor(r) === "fake" || tagFor(r) === "misleading").length;
     const counter = el("div", { class: "card tight", style: "border:0; box-shadow:none; border-block-end:1px solid var(--line-soft); display:flex; gap:var(--s3); align-items:center" },
       el("span", { class: "mono", style: "font-size:var(--fs-xs); color:var(--ink-muted)", text: t("sweep.resultsCount", { n: data.results.length, bad }) }));
     rows.append(counter);
 
-    // progressive scoring: each row starts neutral, then gets its tag
-    const delays = [];
-    data.results.forEach((r, i) => {
-      const row = buildRow(r, false);
-      rows.append(row);
-      delays.push(setTimeout(() => {
-        row.replaceWith(buildRow(r, true));
-      }, 420 + i * 340));
-    });
-
-    const last = 420 + data.results.length * 340 + 200;
-    setTimeout(() => {
-      running = false;
-      runBtn.disabled = false;
-      runBtn.lastChild.textContent = t("sweep.run");
-      // notch: if any fake, show the CTA card at the bottom
-      if (bad) {
-        const cta = el("div", { class: "card tight", style: "margin:var(--s4); border-color:var(--tag-fake); background:var(--tag-fake-bg)" },
-          el("div", { class: "row" },
-            el("span", { class: "tag tag-fake" }, el("span", { class: "tag-dot" }), t("common.tagFake")),
-            el("span", { style: "font-weight:600", text: t("sweep.blockedNote") })));
-        rows.append(cta);
-      }
-      afterHost.replaceChildren(notSureCard());
-    }, last);
+    // Results arrive already scored by the server: render them as they are.
+    data.results.forEach((r) => rows.append(buildRow(r, true)));
+    running = false;
+    runBtn.disabled = false;
+    runBtn.lastChild.textContent = t("sweep.run");
+    if (bad) {
+      rows.append(el("div", { class: "card tight", style: "margin:var(--s4); border-color:var(--tag-fake); background:var(--tag-fake-bg)" },
+        el("div", { class: "row" },
+          el("span", { class: "tag tag-fake" }, el("span", { class: "tag-dot" }), t("common.tagFake")),
+          el("span", { style: "font-weight:600", text: t("sweep.blockedNote") }))));
+    }
+    resultsCard.after(notSureCard());
   }
 
   function buildRow(r, scored) {
-    const tagKey = tagFor(r.verdict);
+    const tagKey = tagFor(r);
     const row = el("div", { class: `sweep-row${scored && (tagKey === "fake") ? " is-fake" : scored && tagKey === "misleading" ? " is-mislead" : scored && tagKey === "warning" ? " is-warn" : ""}` });
     const isMaps = channel === "maps" && r.listing;
     row.append(
@@ -188,6 +148,7 @@ export default async function Sweep() {
   runBtn.addEventListener("click", () => runSweep(queryInput.value.trim()));
   queryInput.addEventListener("keydown", (e) => { if (e.key === "Enter") runSweep(queryInput.value.trim()); });
 
-  // The operator chooses when to call an external provider. No automatic sweep.
+  // first impression: run the hero query immediately (demo beat 6)
+  setTimeout(() => runSweep(), 500);
   return root;
 }

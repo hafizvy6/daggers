@@ -1,0 +1,36 @@
+# Daggers production stack: app (FastAPI + portal) behind Caddy (HTTPS).
+#   cp .env.example .env   # then edit: DAGGERS_DOMAIN, provider keys (optional)
+#   docker compose up -d --build
+#   docker compose exec app python -m backend.app.admin_cli create-user --username admin --role admin
+services:
+  app:
+    build: .
+    env_file: .env
+    environment:
+      APP_ENV: production
+      FORWARDED_ALLOW_IPS: "*"   # only Caddy can reach the app (port is not published)
+    volumes:
+      - daggers-data:/app/backend/data
+    expose:
+      - "8000"
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DAGGERS_DOMAIN: ${DAGGERS_DOMAIN:?set DAGGERS_DOMAIN in .env}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+
+volumes:
+  daggers-data:
+  caddy-data:
+  caddy-config:

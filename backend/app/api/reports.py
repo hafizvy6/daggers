@@ -1,78 +1,118 @@
-"""Daggers · reports API (portal routes over the shared SQLite repository).
+"""Police Portal reports (persisted in the WS1 SQLite store).
 
-GET  /api/reports                 list (evidence embedded)
-GET  /api/reports/{id}            one
-POST /api/reports                 410 — manual filing removed; actionable findings auto-queue
-POST /api/reports/{id}/advance    QUEUED → SUBMITTED → SEEN
-GET  /api/reports/{id}/export     evidence pack (JSON download)
+GET  /api/reports                    viewer        list (evidence embedded, zero-PII)
+GET  /api/reports/{id}               viewer        one
+POST /api/reports        {finding_id} investigator file a report for a finding (idempotent)
+POST /api/reports/{id}/advance {status} investigator  QUEUED → SUBMITTED → SEEN (forward only)
+GET  /api/reports/{id}/export        viewer        investigation pack: report + finding + evidence provenance
 
-All report data comes from `request.app.state.runtime.repo`, so SQL, canonical
-shapes, and zero-PII validation live in `db/repo.py`.
+Report evidence is the C1 finding + final tag + evidence_id only; the WS1 zero-PII
+validator rejects anything else. Full verification evidence lives on the finding.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+
+from .. import security
+from ..channels.official import POLICY_VERSION
+from ..db.repo import utc_now
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 ORDER = ["QUEUED", "SUBMITTED", "SEEN"]
 
 
+class FileIn(BaseModel):
+    finding_id: int
+
+
 class AdvanceIn(BaseModel):
-    status: str
+    status: Literal["QUEUED", "SUBMITTED", "SEEN"]
 
 
-def _runtime(request: Request):
+def _rt(request: Request):
     return request.app.state.runtime
 
 
-def _repo(request: Request):
-    return _runtime(request).repo
-
-
-
-def _utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+def report_evidence(finding: dict) -> dict:
+    gov = finding.get("gov_verification") or {}
+    return {
+        **finding,
+        "tag": finding.get("tag"),
+        "evidence_id": gov.get("evidence_id"),
+        "verification_status": gov.get("status"),
+    }
 
 
 @router.get("")
-def list_reports(request: Request):
-    return {"reports": _repo(request).list_reports()}
+def list_reports(request: Request, limit: int = Query(100, ge=1, le=500)):
+    security.require(request, "viewer")
+    rt = _rt(request)
+    return {"reports": [rt.tag_report(r) for r in rt.repo.list_reports(limit=limit)]}
 
 
 @router.get("/{report_id}")
 def get_report(report_id: int, request: Request):
-    report = _repo(request).get_report(report_id)
+    security.require(request, "viewer")
+    rt = _rt(request)
+    report = rt.tag_report(rt.repo.get_report(report_id))
     if not report:
         raise HTTPException(404, "report not found")
     return report
 
 
-@router.post("", status_code=410)
-def manual_report_removed():
-    raise HTTPException(410, "manual report filing removed; actionable findings are queued automatically")
+@router.post("", status_code=201)
+def file_report(body: FileIn, request: Request):
+    principal = security.require(request, "investigator")
+    rt = _rt(request)
+    finding = rt.get_finding(body.finding_id)
+    if not finding:
+        raise HTTPException(404, "finding not found")
+    existing = rt.repo.report_for_finding(finding["id"])
+    if existing:
+        return existing
+    report = rt.repo.insert_report(finding_id=finding["id"], evidence=report_evidence(finding),
+                                   status="QUEUED", auto=False, filed_at=utc_now())
+    security.audit(request, principal, "report.file", f"report:{report['id']}",
+                   detail={"finding_id": finding["id"], "tag": finding.get("tag")})
+    return report
 
 
 @router.post("/{report_id}/advance")
 def advance(report_id: int, body: AdvanceIn, request: Request):
-    if body.status not in ORDER:
-        raise HTTPException(422, f"status must be one of {ORDER}")
-    filed_at = _utc_now() if body.status == "SUBMITTED" else None
-    report = _repo(request).set_report_status(report_id, body.status, filed_at=filed_at)
+    principal = security.require(request, "investigator")
+    repo = _rt(request).repo
+    report = repo.get_report(report_id)
     if not report:
         raise HTTPException(404, "report not found")
-    return report
+    if ORDER.index(body.status) < ORDER.index(report["status"]):
+        raise HTTPException(409, "report status can only move forward")
+    updated = repo.set_report_status(report_id, body.status)
+    security.audit(request, principal, "report.advance", f"report:{report_id}", detail={"status": body.status})
+    return updated
 
 
 @router.get("/{report_id}/export")
 def export(report_id: int, request: Request):
-    report = _repo(request).get_report(report_id)
+    principal = security.require(request, "viewer")
+    rt = _rt(request)
+    report = rt.repo.get_report(report_id)
     if not report:
         raise HTTPException(404, "report not found")
-    return JSONResponse(
-        report,
-        headers={"Content-Disposition": f'attachment; filename="daggers-report-{report_id}.json"'},
-    )
+    finding = rt.get_finding(report["finding_id"])
+    registry = rt.trust_policy.registry.version if rt.trust_policy else None
+    pack = {
+        "kind": "daggers-investigation-pack",
+        "generated_at": utc_now(),
+        "generated_by": principal.username,
+        "policy_version": POLICY_VERSION,
+        "registry_version": registry,
+        "disclaimer": "Generated by Daggers (unofficial prototype). Verify before operational use.",
+        "report": report,
+        "finding": finding,
+    }
+    security.audit(request, principal, "report.export", f"report:{report_id}")
+    return JSONResponse(pack, headers={"Content-Disposition": f'attachment; filename="daggers-report-{report_id}.json"'})

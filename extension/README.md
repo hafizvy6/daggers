@@ -1,14 +1,14 @@
 # Daggers Shield — Chrome extension (Manifest V3)
 
-Labels **organic** Google results with the Daggers backend's live verdict tag:
+Labels **organic** Google results with the Daggers backend's tag:
 `SAFE` (green) · `WARNING` (amber) · `MISLEADING` (purple) · `FAKE` (red) · `NOT CHECKED` (grey).
 
-> Unofficial hackathon prototype. **Not** an official UAE Police or government product.
+> Unofficial hackathon prototype. **Not** an Abu Dhabi Police, UAE Police or government product.
 > **Not published** on the Chrome Web Store.
 
 ## Install (local development)
 
-1. Start the backend: `make dev` (serves `http://localhost:8000`). The radar stays quiet until you enable live adapters; the extension labels results with whatever the live API knows.
+1. Start the backend: `make dev` (serves `http://localhost:8000`).
 2. Chrome → `chrome://extensions` → enable **Developer mode** → **Load unpacked** → select this `extension/` folder.
 3. Search on `www.google.com` or `www.google.ae`. Each organic result gets a label; hover for reasons.
 4. Popup: change the backend URL (HTTPS required except `localhost`/`127.0.0.1`; Chrome asks for
@@ -20,8 +20,9 @@ Labels **organic** Google results with the Daggers backend's live verdict tag:
   `tag: "SAFE"` **and** `domain_auth.authenticated: true`.
 * **Fail safe.** Timeout (6 s), network error, HTTP error, malformed reply or a worker that never answers →
   grey `NOT CHECKED`. Never green.
-* **Older backend** (no `tag` field in the response): `UNKNOWN` is shown as
-  `UNVERIFIED` (amber), never SAFE.
+* **Integrated backend:** the label always equals the `tag` returned by `/api/scan` (verified in the
+  browser end-to-end test). A backend without a `tag` field: `UNKNOWN` is shown as `UNVERIFIED` (amber), never SAFE.
+* SAFE needs an **approved** registry entry; with the shipped registry (all pending) official sites show WARNING.
 * **Skipped:** ads (`#tads`, sponsored blocks), Maps/local packs, carousels, and all Google-internal links.
 * **Dynamic results** are handled with a debounced `MutationObserver`; each link is labelled once.
 

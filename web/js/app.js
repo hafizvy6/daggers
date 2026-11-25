@@ -1,9 +1,9 @@
 /* ============================================================
-   Daggers · app.js — hash router + boot + live connection chrome
+   Daggers · app.js — hash router + boot + chrome (lang/mode/banner)
    Views are plain ES modules: export default async (ctx) => Node
    ============================================================ */
 import { initI18n, setLang, getLang, t, onLangChange } from "./i18n/i18n.js";
-import { initApi, refreshApi, watchNetwork, onState, state, connectStream, getGuardStats } from "./api.js";
+import { initApi, watchNetwork, onState, state, connectStream, refreshSession } from "./api.js";
 import { icons, logoMark } from "./components/icons.js";
 import { el } from "./components/tag.js";
 import { toast } from "./components/toast.js";
@@ -13,14 +13,15 @@ const ROUTES = {
   finding: () => import("./views/finding.js"),
   sweep:   () => import("./views/sweep.js"),
   check:   () => import("./views/check.js"),
-  number:  () => import("./views/number.js"),
   portal:  () => import("./views/portal.js"),
   guard:   () => import("./views/guard.js"),
   verdict: () => import("./views/verdict.js"),
+  login:   () => import("./views/login.js"),
 };
 
 export const app = {
-  streamHooks: [],         // views subscribe to real SSE findings
+  streamHooks: [],         // views can subscribe to live findings
+  guardHooks: [],          // views can subscribe to live Guard list changes
   lastFinding: null,
 };
 
@@ -34,110 +35,89 @@ function parseHash() {
 }
 
 function paintIcons(root = document) {
-  root.querySelectorAll("[data-icon]").forEach((node) => {
-    const key = node.getAttribute("data-icon");
-    if (icons[key] && !node.firstChild) node.innerHTML = icons[key]({ size: 18 });
+  root.querySelectorAll("[data-icon]").forEach((n) => {
+    const key = n.getAttribute("data-icon");
+    if (icons[key] && !n.firstChild) n.innerHTML = icons[key]({ size: 18 });
   });
 }
 
 function applyStaticStrings(root = document) {
-  root.querySelectorAll("[data-i18n]").forEach((node) => {
-    node.textContent = t(node.getAttribute("data-i18n"));
+  root.querySelectorAll("[data-i18n]").forEach((n) => {
+    n.textContent = t(n.getAttribute("data-i18n"));
   });
-  root.querySelectorAll("[data-i18n-aria]").forEach((node) => {
-    node.setAttribute("aria-label", t(node.getAttribute("data-i18n-aria")));
+  root.querySelectorAll("[data-i18n-aria]").forEach((n) => {
+    n.setAttribute("aria-label", t(n.getAttribute("data-i18n-aria")));
   });
 }
 
-/* ---------------- chrome: language, connection, banner ----------- */
+/* ---------------- chrome: lang, mode, heartbeat, banner ----------- */
 function wireChrome() {
   document.getElementById("brandMark").innerHTML = logoMark({ size: 26 });
 
   const langSwitch = document.getElementById("langSwitch");
-  langSwitch.addEventListener("click", (event) => {
-    const button = event.target.closest("button[data-lang]");
-    if (button) setLang(button.dataset.lang);
+  langSwitch.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-lang]");
+    if (b) setLang(b.dataset.lang);
   });
 
   // mobile nav drawer
   const nav = document.getElementById("nav");
   const scrim = document.getElementById("navScrim");
-  const button = document.getElementById("menuBtn");
-  const closeNav = () => {
-    nav.classList.remove("is-open");
-    scrim.classList.remove("is-open");
-    button.setAttribute("aria-expanded", "false");
-  };
-  button.addEventListener("click", () => {
+  const btn = document.getElementById("menuBtn");
+  const closeNav = () => { nav.classList.remove("is-open"); scrim.classList.remove("is-open"); btn.setAttribute("aria-expanded", "false"); };
+  btn.addEventListener("click", () => {
     const open = !nav.classList.contains("is-open");
     nav.classList.toggle("is-open", open);
     scrim.classList.toggle("is-open", open);
-    button.setAttribute("aria-expanded", String(open));
+    btn.setAttribute("aria-expanded", String(open));
   });
   scrim.addEventListener("click", closeNav);
-  nav.addEventListener("click", (event) => { if (event.target.closest("a")) closeNav(); });
-  document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeNav(); });
+  nav.addEventListener("click", (e) => { if (e.target.closest("a")) closeNav(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeNav(); });
 
+  // mode + lang + network → repaint chrome
   onState(renderState);
   onLangChange(() => {
     applyStaticStrings();
     paintLangButtons();
     renderState(state);
-    navigate(true);
+    navigate(true);          // every visible string is t() — re-render at the same route
   });
 }
 
 function paintLangButtons() {
-  document.querySelectorAll("#langSwitch button").forEach((button) => {
-    button.setAttribute("aria-pressed", String(button.dataset.lang === getLang()));
+  document.querySelectorAll("#langSwitch button").forEach((b) => {
+    b.setAttribute("aria-pressed", String(b.dataset.lang === getLang()));
   });
 }
 
-const RADAR_ADAPTERS = ["crt", "feeds", "enrich", "render", "search", "maps"];
-
-function liveAdapterCount(st) {
-  const adapters = st.adapters || {};
-  return RADAR_ADAPTERS.filter((name) => adapters[name] && adapters[name].enabled).length;
-}
-
-let lastSignature = null;
+let lastMode = null;
 function renderState(st) {
+  // lang buttons
   paintLangButtons();
+  // portal session link
+  const authLabel = document.getElementById("navAuthLabel");
+  if (authLabel) authLabel.textContent = st.user ? (st.user.local ? t("auth.localLabel") : st.user.username) : t("auth.signIn");
+  // heartbeat
+  const hb = document.getElementById("heartbeat");
+  const hbLabel = document.getElementById("hbLabel");
   const down = st.apiDown || st.offline;
-  const adaptersOn = liveAdapterCount(st);
-
-  const chip = document.getElementById("connectionChip");
-  const chipLabel = document.getElementById("connectionLabel");
-  if (chip) chip.classList.toggle("is-down", down);
-  if (chipLabel) chipLabel.textContent = down ? t("top.down") : t("top.modeLive");
-
-  const heartbeat = document.getElementById("heartbeat");
-  const heartbeatLabel = document.getElementById("hbLabel");
-  heartbeat.classList.toggle("is-down", down);
-  heartbeatLabel.textContent = down ? t("top.down") : t("top.live");
-
+  hb.classList.toggle("is-down", down);
+  hbLabel.textContent = down ? t("top.down") : t("top.live");
+  // banner
   const banner = document.getElementById("banner");
   const tag = document.getElementById("bannerTag");
   const text = document.getElementById("bannerText");
-  banner.classList.remove("is-on");
   if (st.offline) {
-    banner.classList.add("is-on");
-    tag.textContent = t("top.offlineTag");
-    text.textContent = t("top.bannerOffline");
+    banner.classList.add("is-on"); tag.textContent = "OFFLINE"; text.textContent = t("top.bannerOffline");
   } else if (st.apiDown) {
-    banner.classList.add("is-on");
-    tag.textContent = t("top.apiUnavailableTag");
-    text.textContent = t("top.bannerApi");
-  } else if (adaptersOn === 0) {
-    banner.classList.add("is-on");
-    tag.textContent = t("top.adaptersTag");
-    text.textContent = t("top.bannerAdapters");
+    banner.classList.add("is-on"); tag.textContent = "OFFLINE"; text.textContent = t("top.bannerApi");
+  } else {
+    banner.classList.remove("is-on");
   }
-  const signature = `${st.mode}|${st.offline}|${st.apiDown}|${adaptersOn}`;
-  if (lastSignature !== null && lastSignature !== signature) {
-    window.dispatchEvent(new CustomEvent("daggers:modechange"));
-  }
-  lastSignature = signature;
+  // Connectivity changes only repaint the banner: views are never re-rendered here,
+  // so a user's input and an error message on screen are never wiped.
+  lastMode = `${st.offline}|${st.apiDown}`;
 }
 
 /* ---------------- router ---------------------------------------- */
@@ -149,23 +129,26 @@ export async function navigate(force = false) {
   currentRoute = { name, param };
   view.setAttribute("data-view", name);
 
-  document.querySelectorAll("[data-nav]").forEach((link) => {
-    const on = link.dataset.nav === name || (name === "finding" && link.dataset.nav === "feed") || (name === "verdict" && link.dataset.nav === "check");
-    if (on) link.setAttribute("aria-current", "page"); else link.removeAttribute("aria-current");
+  // nav highlight
+  document.querySelectorAll("[data-nav]").forEach((a) => {
+    const on = a.dataset.nav === name || (name === "finding" && a.dataset.nav === "feed") || (name === "verdict" && a.dataset.nav === "check");
+    if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
   });
 
   try {
-    const module = await ROUTES[name]();
-    const context = { param, name, app, force };
-    const node = await module.default(context);
+    const mod = await ROUTES[name]();
+    const ctx = { param, name, app, force };
+    const node = await mod.default(ctx);
+    // allow views to persist state (SSE hooks etc.) — never leak past route change
     if (view._cleanup) { try { view._cleanup(); } catch { /* noop */ } }
     view._cleanup = node._cleanup || null;
     view.replaceChildren(node);
-  } catch (error) {
-    console.error("[router]", error);
+  } catch (err) {
+    console.error("[router]", err);
     view.innerHTML = `<div class="card"><div class="card-title">${t("common.errorTitle")}</div><p>${t("common.errorBody")}</p></div>`;
   }
   if (!location.hash.includes("#/")) return;
+  // reset scroll on route change (not on SSE updates)
   if (!sessionStorage.getItem("daggers:keepScroll")) window.scrollTo({ top: 0 });
   sessionStorage.removeItem("daggers:keepScroll");
   paintIcons(view);
@@ -174,34 +157,28 @@ export async function navigate(force = false) {
 
 /* ---------------- live stream → views ---------------------------- */
 function wireStream() {
-  const connection = connectStream({
+  const conn = connectStream({
     onFinding: (finding) => {
       app.lastFinding = finding;
-      app.streamHooks.forEach((fn) => { try { fn(finding); } catch (error) { console.error(error); } });
+      app.streamHooks.forEach((fn) => { try { fn(finding); } catch (e) { console.error(e); } });
       bumpReportBadge();
       toast(t("top.newCaught"), { kind: "good", tag: t("feed.new"), ms: 6000 });
     },
-    onHeartbeat: (status) => {
-      // A real heartbeat is also a successful liveness probe.
-      if (status?.mode === "live" && state.apiDown) refreshApi();
+    onHeartbeat: () => {},
+    onGuard: (event) => {
+      app.guardHooks.forEach((fn) => { try { fn(event); } catch (e) { console.error(e); } });
     },
   });
-  app.stream = connection;
+  app.stream = conn;
 }
 
 async function bumpReportBadge() {
+  if (!state.user) return;  // reports are portal data
   try {
     const { getReports } = await import("./api.js");
     const reports = await getReports();
     const badge = document.getElementById("navReportCount");
-    if (!badge) return;
-    if (reports.length) {
-      badge.hidden = false;
-      badge.textContent = String(reports.length);
-    } else {
-      badge.hidden = true;
-      badge.textContent = "";
-    }
+    if (badge && reports.length) { badge.hidden = false; badge.textContent = String(reports.length); }
   } catch { /* cosmetic */ }
 }
 
@@ -210,24 +187,29 @@ export async function boot() {
   await initI18n();
   wireChrome();
   await initApi();
+  await refreshSession();
   watchNetwork();
   applyStaticStrings();
   paintIcons();
   renderState(state);
-  lastSignature = `${state.mode}|${state.offline}|${state.apiDown}|${liveAdapterCount(state)}`;
+  lastMode = `${state.offline}|${state.apiDown}`;
   await navigate(true);
   wireStream();
   window.addEventListener("hashchange", () => navigate());
-  window.addEventListener("daggers:modechange", () => navigate(true));
   bumpReportBadge();
-  getGuardStats().catch(() => {});
 
   // share-target landing: /share?url=…&text=…&title=…
   if (/\/(share)\/?$/.test(location.pathname) && !location.hash) {
-    const params = new URLSearchParams(location.search);
-    const shared = params.get("url") || params.get("text") || params.get("title") || "";
+    const sp = new URLSearchParams(location.search);
+    const shared = sp.get("url") || sp.get("text") || sp.get("title") || "";
     sessionStorage.setItem("daggers:share", shared);
     location.replace(`${location.pathname}#/check`);
+  } else if (/\/verdict\/?$/.test(location.pathname) && !location.hash) {
+    // DNS/verdict-server landing: /verdict?domain=…&hit=1 → the bilingual verdict view
+    const sp = new URLSearchParams(location.search);
+    const domain = (sp.get("domain") || "").slice(0, 253);
+    if (sp.get("hit") === "1") sessionStorage.setItem("daggers:verdictHit", domain);
+    location.replace(`${location.pathname}#/verdict/${encodeURIComponent(domain)}`);
   } else if (!location.hash) {
     location.replace(`${location.pathname}#/feed`);
   }
