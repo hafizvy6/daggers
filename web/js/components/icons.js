@@ -29,18 +29,9 @@ export const icons = {
   stop: (o) => S(`<rect x="6" y="6" width="12" height="12" rx="1.4" ${stroke}/>`, o),
 };
 
-/** The dagger-in-shield mark (same geometry as the app icon). */
-export const logoMark = ({ size = 28 } = {}) => `
-<svg width="${size}" height="${size}" viewBox="0 0 48 48" fill="none" aria-hidden="true" focusable="false">
-  <path d="M24 3.5l16.5 6.2v11.6c0 9.6-6.4 16.8-16.5 20.4C13.9 38.1 7.5 30.9 7.5 21.3V9.7L24 3.5z"
-        fill="var(--accent-tint)" stroke="var(--ink)" stroke-width="2.6" stroke-linejoin="round"/>
-  <path d="M24 11.5v17" stroke="var(--ink)" stroke-width="2"/>
-  <path d="M20.2 15.2L24 11.5l3.8 3.7" fill="var(--accent)"/>
-  <path d="M24 12v16.5l-2.4-1.6V13.6L24 12z" fill="var(--accent)" stroke="var(--ink)" stroke-width="1.4" stroke-linejoin="round"/>
-  <path d="M24 12l2.4 1.6v12.9L24 28.5V12z" fill="var(--accent)" stroke="var(--ink)" stroke-width="1.4" stroke-linejoin="round"/>
-  <path d="M17 18.6h14" stroke="var(--ink)" stroke-width="3.2" stroke-linecap="round"/>
-  <circle cx="24" cy="9.4" r="2.1" fill="var(--accent)" stroke="var(--ink)" stroke-width="1.4"/>
-</svg>`;
+/** The Daggers brand mark. */
+export const logoMark = ({ size = 28 } = {}) =>
+  `<img src="./icons/logo.png" width="${size}" height="${size}" alt="" aria-hidden="true" style="display:block;flex:none;object-fit:contain" />`;
 
 /** Friendly shield mascot for empty states. */
 export const mascot = ({ size = 72, mood = "calm" } = {}) => `

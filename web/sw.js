@@ -1,6 +1,6 @@
 /* Daggers · service worker — cache-first shell; network-first for live API GETs.
    Only real successful API responses are cached. No fixture or evidence bundle. */
-const VERSION = "daggers-live-v4.0.0";
+const VERSION = "daggers-live-v4.0.1";
 const SHELL = [
   "./", "./index.html", "./config.js", "./manifest.json",
   "./css/tokens.css", "./css/base.css", "./css/layout.css", "./css/components.css",
@@ -16,7 +16,7 @@ const SHELL = [
   "./fonts/plex-mono-600.woff2",
   "./fonts/plex-arabic-400.woff2", "./fonts/plex-arabic-500.woff2",
   "./fonts/plex-arabic-600.woff2", "./fonts/plex-arabic-700.woff2",
-  "./icons/icon-192.png", "./icons/icon-512.png", "./icons/maskable-512.png",
+  "./icons/logo.png", "./icons/icon-192.png", "./icons/icon-512.png", "./icons/maskable-512.png", "./icons/apple-touch-icon.png",
 ];
 
 self.addEventListener("install", (event) => {
