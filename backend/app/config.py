@@ -241,6 +241,7 @@ class Settings:
             "maps": {
                 "enabled": self.maps_live_enabled,
                 "configured": bool(self.google_places_api_key),
+                "fallback_source": True,
             },
             "ai": {
                 "enabled": self.ai_state == "live",

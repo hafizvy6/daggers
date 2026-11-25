@@ -35,6 +35,8 @@ PLACES_FIELDS = (
 )
 MAX_LISTINGS = 10
 
+NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+
 
 @dataclass
 class Listing:
@@ -185,7 +187,8 @@ class MapsChannel:
         website_check: dict
         website_result = None
         if listing.website:
-            url, problem = urls.normalize_result_url(listing.website)
+            website_raw = listing.website if "://" in listing.website else "https://" + listing.website
+            url, problem = urls.normalize_result_url(website_raw)
             if url:
                 website_result = self.scorer.assess_url(url, text=listing.name)
                 website_check = {"status": "checked", **{k: website_result[k] for k in (

@@ -9,7 +9,9 @@ from backend.tests.ws2 import helpers
 from backend.app.channels import privacy, urls
 from backend.app.channels.guard import GuardSync, build_blocklist, render
 from backend.app.channels.http_client import ProviderError
-from backend.app.channels.maps import Listing, MapsChannel
+from backend.app.channels.maps import (
+    Listing, MapsChannel, NominatimProvider, default_maps_providers, parse_nominatim,
+)
 from backend.app.channels.search import (
     DuckDuckGoProvider, SearchChannel, SerperProvider, TTLCache, default_providers, parse_ddg_html,
 )
@@ -120,6 +122,61 @@ class TestSearch(unittest.TestCase):
         unconfigured = SearchChannel(prod_scorer(), providers=default_providers({})).run("q")
         self.assertEqual(unconfigured.source_kind, "unconfigured")
         self.assertEqual(unconfigured.results, [])
+
+class TestNominatim(unittest.TestCase):
+    PAYLOAD = [
+        {"osm_type": "node", "osm_id": 1, "name": "Test Police Centre",
+         "display_name": "Test Police Centre, Al Reem Island, Abu Dhabi",
+         "type": "police", "class": "amenity",
+         "extratags": {"phone": "+971 2 555 0000", "website": "adpolice.gov.ae"}},
+        {"osm_type": "way", "osm_id": 2, "name": "No Tags Listing",
+         "display_name": "No Tags Listing, Dubai", "type": "cafe", "class": "amenity"},
+        {"osm_type": "node", "osm_id": 3, "name": "", "display_name": ", Sharjah", "type": "x"},
+    ]
+
+    def test_parse_maps_extratags_and_scheme(self):
+        listings = parse_nominatim(self.PAYLOAD, 10)
+        self.assertEqual(len(listings), 2)  # nameless item is dropped
+        first = listings[0]
+        self.assertEqual(first.provider, "openstreetmap")
+        self.assertEqual(first.place_id, "N/1")
+        self.assertEqual(first.website, "https://adpolice.gov.ae")
+        self.assertEqual(first.phone, "+971 2 555 0000")
+        self.assertEqual(first.source_kind, "live")
+        self.assertEqual(first.business_status, "")  # unknown stays unknown
+        second = listings[1]
+        self.assertIsNone(second.website)
+        self.assertIsNone(second.phone)
+
+    def test_provider_builds_query_and_parses(self):
+        seen = {}
+        def fake_http(url, **kw):
+            seen["url"] = url
+            return json.dumps(self.PAYLOAD).encode()
+        listings = NominatimProvider(http=fake_http).search("شرطة أبوظبي", "ar", 10)
+        self.assertIn("countrycodes=ae", seen["url"])
+        self.assertIn("accept-language=ar", seen["url"])
+        self.assertEqual(len(listings), 2)
+
+    def test_provider_chain_keyless_and_keyed(self):
+        self.assertEqual(default_maps_providers({}), [])
+        keyless = [p.name for p in default_maps_providers({"MAPS_LIVE_ENABLED": "1"})]
+        self.assertEqual(keyless, ["openstreetmap"])
+        keyed = [p.name for p in default_maps_providers({"MAPS_LIVE_ENABLED": "1", "GOOGLE_PLACES_API_KEY": "k"})]
+        self.assertEqual(keyed, ["google_places", "openstreetmap"])
+
+    def test_nominatim_listing_flows_through_assess(self):
+        def fake_http(url, **kw):
+            return json.dumps(self.PAYLOAD).encode()
+        channel = MapsChannel(prod_scorer(), providers=[NominatimProvider(http=fake_http)])
+        result = channel.run("police centre abu dhabi")
+        self.assertEqual(result["source_kind"], "live")
+        self.assertEqual(len(result["listings"]), 2)
+        listing = result["listings"][0]
+        self.assertEqual(listing["listing"]["provider"], "openstreetmap")
+        self.assertIn("identity", listing["checks"])
+        self.assertIn("phone", listing["checks"])
+        self.assertEqual(listing["checks"]["website"]["status"], "checked")
 
 
 class TestMaps(unittest.TestCase):
