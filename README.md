@@ -167,7 +167,7 @@ Cyrillic `а` + Latin `mazon.ae` decodes from `xn--mazon-3ve.ae`, folds to `amaz
 
 A bare boot is honest but quiet. To see real findings:
 
-1. Set `CRT_ENABLED=1` and start the app — the crt.sh poller watches new UAE-brand certificates. Keep `HTTP_USER_AGENT` identifiable.
+1. Set `CRT_ENABLED=1` and start the app — the crt.sh poller watches high-signal UAE-brand certificate terms (never raw three-letter tokens). Keep `HTTP_USER_AGENT` identifiable. Use `python ops/evaluate_radar.py` to inspect the offline labeled candidate/risk harness.
 2. Set `FEEDS_ENABLED=1` (optionally `PHISHTANK_KEY=…`) — the OpenPhish/URLhaus poller labels confirmed scams.
 3. Set `ENRICH_ENABLED=1` — RDAP age, DNS, TLS issuer/age and favicon hash join findings.
 4. Install the renderer (`make install-render`), set `RENDER_ENABLED=1` — Playwright captures pages, pHash/ORB compare against the operator-supplied gallery index, and **real evidence JPGs** are composed and stored.

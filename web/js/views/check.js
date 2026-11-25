@@ -92,7 +92,7 @@ export default async function Check(ctx) {
 }
 
 function verdictCard(res) {
-  const tagKey = tagFor(res.verdict);
+  const tagKey = tagFor(res.verdict, res);
   const c = el("section", { class: "card", style: `border-color: var(--tag-${tagKey === "unknown" ? "unknown" : tagKey})` });
   const bodyKey = { safe: "check.safeBody", warning: "check.warnBody", misleading: "check.misleadBody", fake: "check.fakeBody", unknown: "check.unknownBody" }[tagKey];
   const doKey = { safe: "check.doSafe", warning: "check.doWarn", misleading: "check.doMislead", fake: "check.doFake", unknown: "check.doUnknown" }[tagKey];

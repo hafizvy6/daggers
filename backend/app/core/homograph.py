@@ -97,9 +97,11 @@ DIGIT_CONFUSABLES = {"0": "o", "1": "l", "3": "e", "5": "s", "7": "t"}
 
 
 def confusable_fold(text: str) -> str:
-    normalized = unicodedata.normalize("NFKC", text or "").casefold()
+    normalized = unicodedata.normalize("NFKD", text or "").casefold()
     folded_chars: list[str] = []
     for char in normalized:
+        if unicodedata.combining(char):
+            continue
         folded_chars.append(CONFUSABLES.get(char, char))
     return "".join(folded_chars)
 
@@ -107,9 +109,11 @@ def confusable_fold(text: str) -> str:
 def visual_fold(text: str) -> str:
     """Like confusable_fold but also maps common digit lookalikes (0->o, 1->l, ...).
     Use for homograph/spoof detection; do not use for numeric/amount parsing."""
-    normalized = unicodedata.normalize("NFKC", text or "").casefold()
+    normalized = unicodedata.normalize("NFKD", text or "").casefold()
     folded_chars: list[str] = []
     for char in normalized:
+        if unicodedata.combining(char):
+            continue
         mapped = CONFUSABLES.get(char)
         if mapped is None:
             mapped = DIGIT_CONFUSABLES.get(char, char)
@@ -212,6 +216,19 @@ def audit(
             reasons.append(f"mixed-script domain label ({' + '.join(scripts)})")
             break
 
+    has_confusable_evidence = mixed_script or bool(forms["has_punycode"])
+    if not has_confusable_evidence:
+        for label in labels:
+            for char in label:
+                if char == ".":
+                    continue
+                folded = char.casefold()
+                if confusable_fold(char) != folded or visual_fold(char) != folded:
+                    has_confusable_evidence = True
+                    break
+            if has_confusable_evidence:
+                break
+
     spoofed_domain: str | None = None
     for official in official_domains:
         official = str(official).lower()
@@ -226,13 +243,14 @@ def audit(
         label_match = len(official_label) >= 3 and any(
             visual_fold(label) == visual_fold(official_label) for label in labels
         )
-        if (
+        fold_match = (
             folded_registrable == folded_official
             or folded_registrable_plain == folded_official_plain
             or visual_fold(unicode_host) == folded_official
             or confusable_fold(unicode_host) == folded_official_plain
             or label_match
-        ):
+        )
+        if fold_match and has_confusable_evidence:
             spoofed_domain = official
             reasons.append(f"confusable spoof of {official} (look-alike letters from another alphabet)")
             break

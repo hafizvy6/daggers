@@ -49,7 +49,32 @@ class Catalog:
 
     @property
     def official_domains(self) -> tuple[str, ...]:
-        return tuple(str(brand["official_domain"]).lower() for brand in self.brands)
+        domains: list[str] = []
+        for brand in self.brands:
+            domains.append(str(brand["official_domain"]).lower())
+            domains.extend(str(d).lower() for d in brand.get("official_domains", []))
+        return tuple(dict.fromkeys(d for d in domains if d))
+
+    @property
+    def radar_terms(self) -> tuple[str, ...]:
+        """High-signal CT/DNS terms. Short brand tokens are never emitted raw."""
+        candidates: list[str] = []
+        for brand in self.brands:
+            official = str(brand["official_domain"]).strip().lower().rstrip(".")
+            first = official.split(".", 1)[0]
+            explicit = brand.get("radar_terms") or []
+            generated = [first, str(brand["token"]).lower()]
+            for alias in brand.get("aliases", []):
+                generated.append("".join(ch for ch in str(alias).casefold() if ch.isalnum()))
+            if first.startswith("bank") and len(first) > 4:
+                generated.append(first[4:] + "bank")
+            if first.endswith("bank") and len(first) > 4:
+                generated.append("bank" + first[:-4])
+            for term in [*explicit, *generated]:
+                compact = "".join(ch for ch in str(term).casefold() if ch in "abcdefghijklmnopqrstuvwxyz0123456789")
+                if len(compact) >= 4:
+                    candidates.append(compact)
+        return tuple(dict.fromkeys(candidates))
 
     @property
     def brand_tokens(self) -> tuple[str, ...]:
@@ -92,7 +117,9 @@ def load_catalogs(core_dir: Path | None = None) -> Catalog:
             {
                 "token": str(item["token"]).lower(),
                 "official_domain": str(item["official_domain"]).lower(),
+                "official_domains": [str(d).lower() for d in item.get("official_domains", []) if str(d).strip()],
                 "aliases": [str(alias).lower() for alias in item.get("aliases", [])],
+                "radar_terms": [str(term).lower() for term in item.get("radar_terms", [])],
             }
         )
 

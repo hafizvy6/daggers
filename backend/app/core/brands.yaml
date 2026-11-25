@@ -24,6 +24,13 @@
       "fab",
       "first abu dhabi bank",
       "بنك أبوظبي الأول"
+    ],
+    "radar_terms": [
+      "bankfab",
+      "fabbank",
+      "firstabudhabi",
+      "first-abu-dhabi",
+      "firstabudhabibank"
     ]
   },
   {
@@ -42,6 +49,10 @@
       "dib",
       "dubai islamic bank",
       "بنك دبي الإسلامي"
+    ],
+    "radar_terms": [
+      "dibbank",
+      "dubaiislamic"
     ]
   },
   {
@@ -169,6 +180,12 @@
       "rta",
       "roads and transport authority",
       "هيئة الطرق والمواصلات"
+    ],
+    "radar_terms": [
+      "rtarefund",
+      "rtaticket",
+      "rtatopup",
+      "rta-parking"
     ]
   },
   {
@@ -254,6 +271,21 @@
     "aliases": [
       "aramex",
       "أرامكس"
+    ],
+    "official_domains": [
+      "aramex.com.au",
+      "aramex.co.nz",
+      "aramex.co.za",
+      "aramex.net",
+      "aramex.ae",
+      "aramex.uk",
+      "aramex.ie",
+      "aramex.de",
+      "aramex.fr",
+      "aramex.sg",
+      "aramex.in",
+      "aramex.cn",
+      "aramex-china.cn"
     ]
   },
   {
@@ -262,6 +294,12 @@
     "aliases": [
       "careem",
       "كريم"
+    ],
+    "official_domains": [
+      "careem.org",
+      "careem.net",
+      "careem.ae",
+      "careem.me"
     ]
   },
   {
@@ -302,6 +340,27 @@
     "aliases": [
       "mohre",
       "وزارة الموارد البشرية"
+    ]
+  },
+  {
+    "token": "theuaelottery",
+    "official_domain": "theuaelottery.ae",
+    "official_domains": [],
+    "aliases": [
+      "the uae lottery",
+      "uae lottery",
+      "uaelottery",
+      "يانصيب الإمارات"
+    ]
+  },
+  {
+    "token": "bigticket",
+    "official_domain": "bigticket.ae",
+    "official_domains": [],
+    "aliases": [
+      "big ticket",
+      "bigticket",
+      "بيج تيكت"
     ]
   }
 ]

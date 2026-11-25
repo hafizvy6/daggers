@@ -265,17 +265,31 @@ def _brand_candidates(
         official = str(brand.get("official_domain", "")).lower()
         official_label = official.split(".")[0]
         aliases = [str(alias).lower() for alias in brand.get("aliases", [])]
-        tokens = tuple(dict.fromkeys([canonical, *aliases]))
+        radar_terms = [str(term).lower() for term in brand.get("radar_terms", [])]
+        tokens = tuple(dict.fromkeys([canonical, *aliases, *radar_terms]))
         url_token = next(
             (token for token in tokens if len(token) >= 3 and _token_present(token, folded_url)),
             None,
+        )
+        generic_suffix = re.compile(
+            r"(?:account|alert|bank|banking|cards|help|home|login|mobile|online|pay|payment|portal|secure|service|support|web)$"
+        )
+        folded_labels = [homograph.confusable_fold(label) for label in labels]
+        compound_host = any(
+            len(homograph.confusable_fold(token)) >= 4
+            and any(
+                label == homograph.confusable_fold(token)
+                or (label.startswith(homograph.confusable_fold(token)) and generic_suffix.search(label[len(token):]))
+                for label in folded_labels
+            )
+            for token in tokens
         )
         exact_host = any(
             homograph.confusable_fold(segment) == homograph.confusable_fold(token)
             for segment in [*segments, *labels]
             for token in tokens
             if len(token) >= 3
-        ) or any(
+        ) or compound_host or any(
             homograph.confusable_fold(label) == homograph.confusable_fold(official_label)
             for label in labels
         )
@@ -425,7 +439,12 @@ def score_url(
 ) -> ScoreResult:
     """S0–S3 + S5 + S6. Pure: all I/O (feeds, enrichment, vision) arrives via context."""
     context = dict(context or {})
-    official_domains = tuple(str(brand["official_domain"]).lower() for brand in brands)
+    official_domains = tuple(
+        d.lower()
+        for brand in brands
+        for d in [str(brand.get("official_domain", "")).lower(), *(str(x).lower() for x in brand.get("official_domains", []))]
+        if d
+    )
     norm = normalize_url(raw_url, suffix_resolver)
     audit = homograph.audit(norm.unicode_host, official_domains, norm.registrable_domain)
     is_official = any(homograph.is_official_host(norm.unicode_host, domain) for domain in official_domains)
@@ -433,7 +452,7 @@ def score_url(
         return ScoreResult(
             score=0.0,
             verdict=UNKNOWN,
-            reasons=["matches official domain allowlist"],
+            reasons=["authenticated official domain"],
             normalized=norm.as_dict(),
             homograph=audit.as_dict(),
             scam_type=None,
@@ -487,7 +506,12 @@ def _score_claim_only(
     brands: list[dict] | tuple[dict, ...],
     thresholds: Mapping[str, float] | None,
 ) -> ScoreResult:
-    official_domains = tuple(str(brand["official_domain"]).lower() for brand in brands)
+    official_domains = tuple(
+        d.lower()
+        for brand in brands
+        for d in [str(brand.get("official_domain", "")).lower(), *(str(x).lower() for x in brand.get("official_domains", []))]
+        if d
+    )
     claim = claim_engine.evaluate_claims(text, "", list(brands), official_domains)
     if not claim:
         return ScoreResult(

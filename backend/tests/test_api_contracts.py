@@ -98,6 +98,41 @@ def test_scan_contracts_are_live_pure_brain_without_invented_evidence(api_env):
     assert client.post("/api/scan", json={"kind": "banana", "input": "x"}).status_code == 422
 
 
+def test_feed_default_hides_ct_only_unknowns(api_env, insert_test_finding):
+    client, _, _ = api_env
+    insert_test_finding(domain="ct-only-unknown.example", verdict="UNKNOWN", score=0.0)
+    suspicious = insert_test_finding(domain="brand-bait.example", verdict="SUSPICIOUS", score=0.55)
+
+    response = client.get("/api/feed")
+    assert response.status_code == 200
+    domains = {row["domain"] for row in response.json()}
+    assert suspicious["domain"] in domains
+    assert "ct-only-unknown.example" not in domains
+
+    included = client.get("/api/feed?include_unknown=true").json()
+    assert {row["domain"] for row in included} >= {"ct-only-unknown.example", "brand-bait.example"}
+
+
+def test_analyst_label_hides_suppressed_domains_from_feed(api_env, insert_test_finding):
+    client, _, _ = api_env
+    first = insert_test_finding(domain="feed-suppress-me.example", verdict="SUSPICIOUS", score=0.55)
+    second = insert_test_finding(domain="feed-keep-me.example", verdict="SUSPICIOUS", score=0.55)
+
+    response = client.post(f"/api/finding/{first['id']}/label", json={"label": "official"})
+    assert response.status_code == 200
+    assert response.json()["label"] == "official"
+    assert client.get(f"/api/finding/{first['id']}/label").json()["label"] == "official"
+
+    domains = {row["domain"] for row in client.get("/api/feed").json()}
+    assert second["domain"] in domains
+    assert first["domain"] not in domains
+
+    suppressed = {row["domain"] for row in client.get("/api/feed?include_suppressed=true").json()}
+    assert {first["domain"], second["domain"]} <= suppressed
+
+    assert client.post(f"/api/finding/{first['id']}/label", json={"label": "not-a-label"}).status_code == 422
+
+
 def test_mode_is_locked_to_live(api_env):
     client, _, _ = api_env
     assert client.get("/api/mode").json() == {"mode": "live"}
@@ -260,12 +295,16 @@ def test_enricher_failure_returns_complete_s5_shape(monkeypatch, tmp_path):
     async def fail(*args, **kwargs):
         raise RuntimeError("offline")
 
+    async def no_page(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr("backend.app.radar.enrich.fetch_page_context", no_page)
     for method in ("_rdap", "_dns", "_tls", "_favicon"):
         monkeypatch.setattr(enricher, method, fail)
     result = asyncio.run(enricher.enrich("example.com"))
     assert set(result) == {
         "rdap_created", "rdap_registrar", "dns_a", "tls_issued",
-        "tls_issuer", "favicon_hash", "cert_age_hours",
+        "tls_issuer", "favicon_hash", "cert_age_hours", "page_context",
     }
     assert result["dns_a"] == []
 
