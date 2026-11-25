@@ -29,7 +29,7 @@ class TestFourteenScenarios(Scenario):
             "https://www.sira.gov.example/fees",
             "Synthetic Residency Authority announces the golden visa renewal fee of AED 1,150.",
         )
-        self.layers(r, auth="AUTHENTICATED", claim="VERIFIED", ws1="UNKNOWN", tag="SAFE")
+        self.layers(r, auth="AUTHENTICATED", claim="VERIFIED", ws1="MISLEADING", tag="SAFE")
         decisive = [e for e in r["gov_verification"]["evidence"] if e["role"] == "decisive"]
         self.assertEqual(decisive[0]["source_class"], "A")
         self.assertTrue(r["gov_verification"]["evidence_id"].startswith("gv_"))
@@ -48,7 +48,7 @@ class TestFourteenScenarios(Scenario):
             "https://police-fines-pay.example/unblock",
             "Synthetic Police: your bank account is frozen due to unpaid traffic fines. Pay AED 500 now.",
         )
-        self.layers(r, auth="UNLISTED", claim="CONTRADICTED", ws1="UNKNOWN", tag="MISLEADING")
+        self.layers(r, auth="UNLISTED", claim="CONTRADICTED", ws1="MISLEADING", tag="MISLEADING")
         self.assertIn("contradicted", " ".join(r["trust_reasons"]))
 
     def test_04_false_immigration_announcement(self):
@@ -63,7 +63,7 @@ class TestFourteenScenarios(Scenario):
             "https://moss-support-apply.example/",
             "Synthetic Ministry of Social Support announces an unemployment grant of AED 5,000 for all residents.",
         )
-        self.layers(r, auth="UNLISTED", claim="CONTRADICTED", ws1="UNKNOWN", tag="MISLEADING")
+        self.layers(r, auth="UNLISTED", claim="CONTRADICTED", ws1="MISLEADING", tag="MISLEADING")
         details = " ".join(e["detail"] for e in r["gov_verification"]["evidence"])
         self.assertIn("amount differs", details)
 
@@ -72,7 +72,7 @@ class TestFourteenScenarios(Scenario):
             "https://cheap-visa-renewal.example/pay",
             "Synthetic Residency Authority: golden visa renewal fee is now only AED 99.",
         )
-        self.layers(r, auth="UNLISTED", claim="CONTRADICTED", ws1="UNKNOWN", tag="MISLEADING")
+        self.layers(r, auth="UNLISTED", claim="CONTRADICTED", ws1="MISLEADING", tag="MISLEADING")
 
     def test_07_legitimate_private_business_not_in_registry(self):
         r = self.assess("https://sunrise-bakery.example/", "Fresh bread daily. Open from 7am.")
@@ -103,7 +103,7 @@ class TestFourteenScenarios(Scenario):
             "https://old-fee-blog.example/",
             "Synthetic Residency Authority: the golden visa renewal fee is AED 1,000.",
         )
-        self.layers(r, auth="UNLISTED", claim="CONTRADICTED", ws1="UNKNOWN", tag="MISLEADING")
+        self.layers(r, auth="UNLISTED", claim="CONTRADICTED", ws1="MISLEADING", tag="MISLEADING")
         roles = {e["role"] for e in r["gov_verification"]["evidence"]}
         self.assertIn("superseded", roles)
 
@@ -128,7 +128,7 @@ class TestFourteenScenarios(Scenario):
             "https://sira.gov.example/ar",
             "أعلنت هيئة الإقامة التجريبية أن رسوم تجديد الإقامة الذهبية ١١٥٠ درهم",
         )
-        self.layers(r, auth="AUTHENTICATED", claim="VERIFIED", ws1="UNKNOWN", tag="SAFE")
+        self.layers(r, auth="AUTHENTICATED", claim="VERIFIED", ws1="MISLEADING", tag="SAFE")
         self.assertEqual(r["gov_verification"]["claim"]["language"], "ar")
         self.assertEqual(r["gov_verification"]["claim"]["amounts_aed"], [1150.0])
 
@@ -137,7 +137,7 @@ class TestFourteenScenarios(Scenario):
             "https://housing-grant-info.example/",
             "Synthetic Ministry of Social Support announces a housing grant of AED 50,000.",
         )
-        self.layers(r, auth="UNLISTED", claim="CONFLICTING_SOURCES", ws1="UNKNOWN", tag="WARNING")
+        self.layers(r, auth="UNLISTED", claim="CONFLICTING_SOURCES", ws1="MISLEADING", tag="MISLEADING")
         self.assertTrue(r["manual_review"])
 
     def test_13_cloned_government_media_page(self):

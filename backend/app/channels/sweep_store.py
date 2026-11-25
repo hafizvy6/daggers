@@ -23,6 +23,7 @@ class SweepStore(Protocol):
     def create_run(self, *, query: str, lang: str, channel: str, engine: str, cached: bool) -> dict: ...
     def add_results(self, run_id: int, results: list[dict]) -> None: ...
     def get_run(self, run_id: int) -> dict | None: ...
+    def find_latest_run(self, *, channel: str, query: str | None = None, lang: str | None = None) -> dict | None: ...
 
 
 class InMemorySweepStore:
@@ -58,6 +59,19 @@ class InMemorySweepStore:
                 return None
             return {**run, "results": [dict(r) for r in run["results"]]}
 
+    def find_latest_run(self, *, channel: str, query: str | None = None, lang: str | None = None) -> dict | None:
+        with self._lock:
+            for run_id in sorted(self._runs.keys(), reverse=True):
+                run = self._runs[run_id]
+                if run.get("channel") != channel:
+                    continue
+                if query and str(run.get("query", "")).casefold() != str(query).casefold():
+                    continue
+                if lang and run.get("lang") != lang:
+                    continue
+                return {**run, "results": [dict(r) for r in run["results"]]}
+        return None
+
 
 class RepoSweepStore:
     """Adapter over the shared ``Repository`` sweep methods."""
@@ -78,6 +92,12 @@ class RepoSweepStore:
 
     def get_run(self, run_id: int) -> dict | None:
         return self.repo.get_sweep_run(run_id)
+
+    def find_latest_run(self, *, channel: str, query: str | None = None, lang: str | None = None) -> dict | None:
+        finder = getattr(self.repo, "find_latest_sweep_run", None)
+        if not callable(finder):
+            return None
+        return finder(channel=channel, query=query, lang=lang)
 
 
 def make_store(repo=None) -> SweepStore:
